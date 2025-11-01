@@ -168,6 +168,15 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.navigate('Home')}
+        >
+          <Text style={styles.backButtonText}>← Hjem</Text>
+        </TouchableOpacity>
+      </View>
+      
       <View style={styles.content}>
         <Text style={styles.title}>Opprett konto</Text>
         <Text style={styles.subtitle}>Registrer deg for å komme i gang</Text>
@@ -260,6 +269,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  header: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#4CAF50',
+    fontWeight: '600',
   },
   content: {
     flex: 1,

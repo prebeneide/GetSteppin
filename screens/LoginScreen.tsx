@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import AlertModal from '../components/AlertModal';
@@ -21,25 +20,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
-  const { signIn, loading: authLoading, session } = useAuth();
-
-  useEffect(() => {
-    // Keep loading overlay visible while logging in
-    // Show it when we're loading OR when auth is updating after successful login
-    if (loading || (authLoading && !session)) {
-      setIsLoggingIn(true);
-    } else if (!authLoading && session) {
-      // Hide when we have a session (user is logged in)
-      setIsLoggingIn(false);
-    } else if (!authLoading && !loading) {
-      // Hide if auth loading is done and we're not loading
-      setIsLoggingIn(false);
-    }
-  }, [authLoading, loading, session]);
+  const { signIn } = useAuth();
 
   const showAlert = (title: string, message: string) => {
     setAlertTitle(title);
@@ -54,27 +38,21 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
 
     setLoading(true);
-    setIsLoggingIn(false); // Reset logging in state
     try {
       const { error } = await signIn(email.trim(), password);
+      setLoading(false);
       
       if (error) {
-        setLoading(false);
-        setIsLoggingIn(false);
         console.error('Login error:', error);
-        
         // Show user-friendly error message
         const errorMessage = error.message || 'Brukernavn/e-post eller passord er feil';
         showAlert('Innlogging feilet', errorMessage);
       } else {
-        // Success - set loading to false but let isLoggingIn stay true
-        // until session is set (handled by useEffect)
-        setLoading(false);
-        // isLoggingIn will be set to true by useEffect when authLoading becomes true
+        // Success - navigate back to Home
+        navigation.navigate('Home');
       }
     } catch (err: any) {
       setLoading(false);
-      setIsLoggingIn(false);
       console.error('Login exception:', err);
       const errorMsg = err.message || 'Noe gikk galt under innlogging';
       showAlert('Feil', errorMsg);
@@ -87,6 +65,15 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
       >
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.backButtonText}>← Hjem</Text>
+          </TouchableOpacity>
+        </View>
+        
         <View style={styles.content}>
           <Text style={styles.title}>Steppin</Text>
           <Text style={styles.subtitle}>Logg inn på din konto</Text>
@@ -98,7 +85,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!loading && !isLoggingIn}
+            editable={!loading}
           />
 
           <TextInput
@@ -109,15 +96,15 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            editable={!loading && !isLoggingIn}
+            editable={!loading}
           />
 
           <TouchableOpacity
-            style={[styles.button, (loading || isLoggingIn) && styles.buttonDisabled]}
+            style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
-            disabled={loading || isLoggingIn}
+            disabled={loading}
           >
-            {loading || isLoggingIn ? (
+            {loading ? (
               <View style={styles.buttonLoading}>
                 <ActivityIndicator size="small" color="#fff" />
                 <Text style={styles.buttonText}>Logger inn...</Text>
@@ -130,7 +117,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           <TouchableOpacity
             style={styles.linkButton}
             onPress={() => navigation.navigate('SignUp')}
-            disabled={loading || isLoggingIn}
+            disabled={loading}
           >
             <Text style={styles.linkText}>
               Har du ikke konto? Registrer deg
@@ -138,20 +125,6 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Loading overlay when logging in */}
-      <Modal
-        transparent
-        visible={isLoggingIn}
-        animationType="fade"
-      >
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4CAF50" />
-            <Text style={styles.loadingText}>Logger inn...</Text>
-          </View>
-        </View>
-      </Modal>
 
       {/* Alert Modal */}
       <AlertModal
@@ -168,6 +141,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  header: {
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#4CAF50',
+    fontWeight: '600',
   },
   content: {
     flex: 1,
@@ -223,25 +211,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  loadingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingContainer: {
-    backgroundColor: '#fff',
-    padding: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-    minWidth: 200,
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
   },
 });
 
