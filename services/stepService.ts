@@ -7,19 +7,45 @@ export interface StepDataEntry {
 }
 
 /**
- * Save or update step data for a user for today
+ * Save or update step data for a user or device for today
+ * Supports both logged in users (userId) and anonymous users (deviceId)
  */
-export const saveStepData = async (userId: string, steps: number, distanceMeters: number): Promise<{ error: any }> => {
+export const saveStepData = async (
+  userId: string | null, 
+  steps: number, 
+  distanceMeters: number,
+  deviceId?: string | null
+): Promise<{ error: any }> => {
   try {
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
+    // Determine if we're dealing with logged in user or anonymous
+    const isLoggedIn = userId !== null && userId !== undefined && userId !== '';
+
     // Check if entry exists for today
-    const { data: existing, error: checkError } = await supabase
-      .from('step_data')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('date', today)
-      .single();
+    let query;
+    
+    if (isLoggedIn) {
+      query = supabase
+        .from('step_data')
+        .select('id')
+        .eq('date', today)
+        .eq('user_id', userId!);
+    } else {
+      // For anonymous users, check by device_id only (user_id should be null)
+      if (!deviceId) {
+        console.error('No deviceId provided for anonymous user');
+        return { error: { message: 'Device ID required for anonymous users' } };
+      }
+      query = supabase
+        .from('step_data')
+        .select('id')
+        .eq('date', today)
+        .eq('device_id', deviceId)
+        .is('user_id', null);
+    }
+
+    const { data: existing, error: checkError } = await query.single();
 
     if (checkError && checkError.code !== 'PGRST116') {
       // PGRST116 means no rows found, which is fine
@@ -44,14 +70,22 @@ export const saveStepData = async (userId: string, steps: number, distanceMeters
       }
     } else {
       // Insert new entry
+      const insertData: any = {
+        date: today,
+        steps,
+        distance_meters: distanceMeters,
+      };
+
+      if (isLoggedIn) {
+        insertData.user_id = userId;
+      } else {
+        insertData.device_id = deviceId;
+        insertData.user_id = null; // Explicitly set to null for anonymous users
+      }
+
       const { error } = await supabase
         .from('step_data')
-        .insert({
-          user_id: userId,
-          date: today,
-          steps,
-          distance_meters: distanceMeters,
-        });
+        .insert(insertData);
 
       if (error) {
         console.error('Error inserting step data:', error);

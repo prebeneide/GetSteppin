@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import OnboardingScreen from './OnboardingScreen';
 import CircularProgress from '../components/CircularProgress';
+import StatisticsView from '../components/StatisticsView';
 
 interface HomeScreenProps {
   navigation: any;
@@ -20,15 +21,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [goalLoaded, setGoalLoaded] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [profile, setProfile] = useState<{ username: string | null } | null>(null);
 
-  // Save step data to Supabase periodically
+  // Save step data to Supabase periodically (for both logged in and anonymous users)
   useEffect(() => {
-    if (!user || !stepData.isAvailable || stepData.steps === 0) return;
+    if (!stepData.isAvailable || stepData.steps === 0) return;
 
     const saveData = async () => {
       setSaving(true);
       try {
-        await saveStepData(user.id, stepData.steps, stepData.distance);
+        if (user) {
+          // Logged in user
+          await saveStepData(user.id, stepData.steps, stepData.distance, null);
+        } else {
+          // Anonymous user - use device_id
+          const deviceId = await getDeviceId();
+          await saveStepData(null, stepData.steps, stepData.distance, deviceId);
+        }
       } catch (err) {
         console.error('Error saving step data:', err);
       } finally {
@@ -108,12 +117,51 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     loadGoal();
   }, [user]);
 
+  // Load profile for profile button
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    const loadProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+
+        if (!error && data) {
+          setProfile({ username: data.username });
+        }
+      } catch (err) {
+        console.error('Error loading profile:', err);
+      }
+    };
+
+    loadProfile();
+  }, [user]);
+
   // Reload goal when screen comes into focus (e.g., returning from Settings)
   useFocusEffect(
     React.useCallback(() => {
       if (goalLoaded) {
         // Reload goal when returning to this screen
         loadGoal();
+      }
+      // Reload profile too
+      if (user) {
+        supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single()
+          .then(({ data }) => {
+            if (data) {
+              setProfile({ username: data.username });
+            }
+          });
       }
     }, [user, goalLoaded])
   );
@@ -189,8 +237,35 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const progressPercent = Math.min(progress, 100);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Velkommen til Steppin!</Text>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Velkommen til Steppin!</Text>
+        <TouchableOpacity
+          style={styles.profileButton}
+          onPress={() => navigation.navigate('Profile')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.profileIconContainer}>
+            {user && profile?.username ? (
+              <View style={styles.profileIconCircle}>
+                <Text style={styles.profileIconText}>
+                  {profile.username.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.menuIconContainer}>
+                <View style={styles.menuIconLine} />
+                <View style={styles.menuIconLine} />
+                <View style={styles.menuIconLine} />
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </View>
       
       {stepError && (
         <View style={styles.errorContainer}>
@@ -256,7 +331,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </>
           )}
 
-          {saving && user && (
+          {saving && (
             <View style={styles.savingContainer}>
               <ActivityIndicator size="small" color="#4CAF50" />
               <Text style={styles.savingText}>Lagrer...</Text>
@@ -271,7 +346,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         </View>
       )}
 
-      {/* Login prompt for friends feature */}
+      {/* Statistics Section - Always show, works for both logged in and anonymous users */}
+      <View style={styles.statisticsWrapper}>
+        <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
+      </View>
+
+      {/* Login prompt for friends feature - Always at bottom */}
       {!user && (
         <View style={styles.loginPrompt}>
           <Text style={styles.loginPromptText}>
@@ -296,21 +376,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         </View>
       )}
 
-      <View style={styles.actionButtons}>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => navigation.navigate('Settings')}
-        >
-          <Text style={styles.settingsButtonText}>⚙️ Innstillinger</Text>
-        </TouchableOpacity>
-
-        {user && (
-          <TouchableOpacity style={styles.button} onPress={signOut}>
-            <Text style={styles.buttonText}>Logg ut</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -318,15 +384,74 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 40,
+    marginBottom: 20,
+    paddingHorizontal: 0,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    flex: 1,
     textAlign: 'center',
-    marginBottom: 20,
-    marginTop: 40,
     color: '#333',
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  profileIconContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  profileIconText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    textTransform: 'uppercase',
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  menuIconLine: {
+    width: 22,
+    height: 2.5,
+    backgroundColor: '#333',
+    borderRadius: 2,
   },
   subtitle: {
     fontSize: 16,
@@ -492,11 +617,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   loginPrompt: {
-    marginTop: 30,
+    marginTop: 'auto',
     padding: 20,
+    paddingBottom: 30,
     backgroundColor: '#E3F2FD',
     borderRadius: 12,
     alignItems: 'center',
+    width: '100%',
   },
   loginPromptText: {
     fontSize: 16,
@@ -530,6 +657,24 @@ const styles = StyleSheet.create({
   },
   loginButtonTextSecondary: {
     color: '#4CAF50',
+  },
+  statisticsWrapper: {
+    width: '100%',
+  },
+  noStatisticsContainer: {
+    marginTop: 20,
+    padding: 20,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    alignItems: 'center',
+    minHeight: 80,
+    justifyContent: 'center',
+  },
+  noStatisticsText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
   },
   actionButtons: {
     marginTop: 'auto',
