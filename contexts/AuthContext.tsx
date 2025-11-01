@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { migrateAnonymousDataToUser } from '../services/migrationService';
 
 interface AuthContextType {
   session: Session | null;
@@ -29,10 +30,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+
+      // Migrer anonym data når bruker logger inn (SIGNED_IN event)
+      if (event === 'SIGNED_IN' && session?.user) {
+        migrateAnonymousDataToUser(session.user.id).catch(err => {
+          console.error('Error migrating anonymous data on sign in:', err);
+          // Ikke feil hvis migrering feiler - brukeren er fortsatt innlogget
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -107,6 +116,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error };
     }
 
+    // Migrer anonym data til brukerkonto når innlogging er vellykket
+    if (data.user) {
+      migrateAnonymousDataToUser(data.user.id).catch(err => {
+        console.error('Error migrating anonymous data:', err);
+        // Ikke feil hvis migrering feiler - brukeren er fortsatt innlogget
+      });
+    }
+
     return { error: null };
   };
 
@@ -140,6 +157,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Don't fail if profile update fails - user is still created
       // They can update username later
     }
+
+    // Migrer anonym data til brukerkonto når registrering er vellykket
+    migrateAnonymousDataToUser(data.user.id).catch(err => {
+      console.error('Error migrating anonymous data:', err);
+      // Ikke feil hvis migrering feiler - brukeren er fortsatt opprettet
+    });
 
     return { error: null };
   };

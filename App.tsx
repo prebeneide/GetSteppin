@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { initializeApp } from './services/initService';
 import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -36,6 +37,11 @@ function RootNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Initialize migrations and storage on app start
+    initializeApp();
+  }, []);
+
   return (
     <AuthProvider>
       <RootNavigator />

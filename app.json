@@ -15,7 +15,9 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMotionUsageDescription": "Denne appen trenger tilgang til bevegelsesdata for å telle skritt."
+        "NSMotionUsageDescription": "Denne appen trenger tilgang til bevegelsesdata for å telle skritt.",
+        "NSPhotoLibraryUsageDescription": "Appen trenger tilgang til bilder for å laste opp profilbilde.",
+        "NSCameraUsageDescription": "Appen trenger tilgang til kamera for å ta profilbilde."
       }
     },
     "android": {

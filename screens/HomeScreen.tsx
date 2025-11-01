@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
@@ -23,7 +23,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [goalLoaded, setGoalLoaded] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [profile, setProfile] = useState<{ username: string | null } | null>(null);
+  const [profile, setProfile] = useState<{ username: string | null; avatar_url: string | null } | null>(null);
+  const [anonymousAvatarUrl, setAnonymousAvatarUrl] = useState<string | null>(null);
 
   // Save step data to Supabase periodically (for both logged in and anonymous users)
   useEffect(() => {
@@ -137,6 +138,27 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   useEffect(() => {
     if (!user) {
       setProfile(null);
+      // Load anonymous avatar if not logged in
+      const loadAnonymousAvatar = async () => {
+        try {
+          const deviceId = await getDeviceId();
+          const { data, error } = await supabase
+            .from('device_settings')
+            .select('avatar_url')
+            .eq('device_id', deviceId)
+            .single();
+
+          if (!error && data && data.avatar_url) {
+            setAnonymousAvatarUrl(data.avatar_url);
+          } else {
+            setAnonymousAvatarUrl(null);
+          }
+        } catch (err) {
+          console.error('Error loading anonymous avatar:', err);
+          setAnonymousAvatarUrl(null);
+        }
+      };
+      loadAnonymousAvatar();
       return;
     }
 
@@ -144,12 +166,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       try {
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('username')
+          .select('username, avatar_url')
           .eq('id', user.id)
           .single();
 
         if (!error && data) {
-          setProfile({ username: data.username });
+          setProfile({ username: data.username, avatar_url: data.avatar_url });
         }
       } catch (err) {
         console.error('Error loading profile:', err);
@@ -166,19 +188,33 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         // Reload goal when returning to this screen
         loadGoal();
       }
-      // Reload profile too
-      if (user) {
-        supabase
-          .from('user_profiles')
-          .select('username')
-          .eq('id', user.id)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              setProfile({ username: data.username });
-            }
-          });
-      }
+              // Reload profile too
+              if (user) {
+                supabase
+                  .from('user_profiles')
+                  .select('username, avatar_url')
+                  .eq('id', user.id)
+                  .single()
+                  .then(({ data }) => {
+                    if (data) {
+                      setProfile({ username: data.username, avatar_url: data.avatar_url });
+                    }
+                  });
+              } else {
+                // Reload anonymous avatar
+                getDeviceId().then(async (deviceId) => {
+                  const { data } = await supabase
+                    .from('device_settings')
+                    .select('avatar_url')
+                    .eq('device_id', deviceId)
+                    .single();
+                  if (data && data.avatar_url) {
+                    setAnonymousAvatarUrl(data.avatar_url);
+                  } else {
+                    setAnonymousAvatarUrl(null);
+                  }
+                });
+              }
     }, [user, goalLoaded])
   );
 
@@ -266,7 +302,13 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           activeOpacity={0.7}
         >
           <View style={styles.profileIconContainer}>
-            {user && profile?.username ? (
+            {(user && profile?.avatar_url) || (!user && anonymousAvatarUrl) ? (
+              <Image
+                source={{ uri: user ? profile!.avatar_url! : anonymousAvatarUrl! }}
+                style={styles.profileAvatar}
+                resizeMode="cover"
+              />
+            ) : user && profile?.username ? (
               <View style={styles.profileIconCircle}>
                 <Text style={styles.profileIconText}>
                   {profile.username.charAt(0).toUpperCase()}
@@ -460,6 +502,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     textTransform: 'uppercase',
+  },
+  profileAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   menuIconContainer: {
     width: 40,
