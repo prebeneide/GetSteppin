@@ -2,9 +2,9 @@
 -- Alle emoji-achievements som kan oppnås i appen
 
 INSERT INTO public.achievement_types (emoji, name, description, category, requirement_value) VALUES
--- Distance achievements
-('🍒', 'Kirsebær', 'Gått 1000 meter', 'distance', 1000),
-('🍑', 'Fersken', 'Gått 10000 meter', 'distance', 10000),
+-- Step achievements (based on steps, not distance)
+('🍒', 'Kirsebær', 'Gått 1000 skritt', 'distance', 1000),
+('🍑', 'Fersken', 'Gått 10000 skritt', 'distance', 10000),
 ('🎯', 'Milestone', 'Når større milepæler (50km, 100km, 500km osv)', 'distance', NULL),
 
 -- Goal achievements

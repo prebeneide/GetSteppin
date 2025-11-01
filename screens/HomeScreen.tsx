@@ -4,11 +4,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
 import { saveStepData } from '../services/stepService';
+import { checkAllAchievements } from '../services/achievementService';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import OnboardingScreen from './OnboardingScreen';
 import CircularProgress from '../components/CircularProgress';
 import StatisticsView from '../components/StatisticsView';
+import AchievementsView from '../components/AchievementsView';
 
 interface HomeScreenProps {
   navigation: any;
@@ -30,14 +32,28 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     const saveData = async () => {
       setSaving(true);
       try {
+        let savedUserId: string | null = null;
+        let savedDeviceId: string | null = null;
+
         if (user) {
           // Logged in user
           await saveStepData(user.id, stepData.steps, stepData.distance, null);
+          savedUserId = user.id;
         } else {
           // Anonymous user - use device_id
           const deviceId = await getDeviceId();
           await saveStepData(null, stepData.steps, stepData.distance, deviceId);
+          savedDeviceId = deviceId;
         }
+
+        // Check and award achievements based on step data
+        await checkAllAchievements(
+          savedUserId,
+          stepData.steps,
+          stepData.distance,
+          dailyGoal,
+          savedDeviceId || undefined
+        );
       } catch (err) {
         console.error('Error saving step data:', err);
       } finally {
@@ -52,7 +68,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     const interval = setInterval(saveData, 30000);
 
     return () => clearInterval(interval);
-  }, [user, stepData.steps, stepData.distance]);
+  }, [user, stepData.steps, stepData.distance, dailyGoal]);
 
   // Load user's daily goal from profile
   const loadGoal = async () => {
@@ -345,6 +361,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           </Text>
         </View>
       )}
+
+      {/* Achievements Section - Always show, works for both logged in and anonymous users */}
+      <View style={styles.achievementsWrapper}>
+        <AchievementsView userId={user?.id || null} isLoggedIn={!!user} />
+      </View>
 
       {/* Statistics Section - Always show, works for both logged in and anonymous users */}
       <View style={styles.statisticsWrapper}>
@@ -657,6 +678,9 @@ const styles = StyleSheet.create({
   },
   loginButtonTextSecondary: {
     color: '#4CAF50',
+  },
+  achievementsWrapper: {
+    width: '100%',
   },
   statisticsWrapper: {
     width: '100%',
