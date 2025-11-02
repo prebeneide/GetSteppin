@@ -414,3 +414,141 @@ export const removeFriend = async (
   }
 };
 
+export interface FriendStepData {
+  id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  steps: number;
+  distance_meters: number;
+  rank: number; // Position among all friends
+}
+
+/**
+ * Hent skritt-data for alle venner (inkludert brukeren selv) for en gitt periode
+ * Sortert etter antall skritt (høyest først)
+ */
+export const getFriendsStepsForPeriod = async (
+  userId: string,
+  startDate: string,
+  endDate: string,
+  includeCurrentUser: boolean = true
+): Promise<{ data: FriendStepData[] | null; error: any }> => {
+  try {
+    // Hent alle venner
+    const { data: friends, error: friendsError } = await getFriends(userId);
+    
+    if (friendsError) {
+      console.error('Error fetching friends:', friendsError);
+      return { data: null, error: friendsError };
+    }
+
+    const friendIds = friends?.map(f => f.id) || [];
+    
+    // Hent skritt-data for alle venner i perioden
+    let stepDataQuery = supabase
+      .from('step_data')
+      .select('user_id, steps, distance_meters')
+      .gte('date', startDate)
+      .lte('date', endDate);
+
+    if (friendIds.length > 0) {
+      stepDataQuery = stepDataQuery.in('user_id', friendIds);
+    } else {
+      // Hvis ingen venner, returner tom liste (eller kun brukeren selv)
+      stepDataQuery = stepDataQuery.eq('user_id', ''); // This won't match anything
+    }
+
+    const { data: friendsStepData, error: stepDataError } = await stepDataQuery;
+
+    if (stepDataError) {
+      console.error('Error fetching friends step data:', stepDataError);
+      return { data: null, error: stepDataError };
+    }
+
+    // Hent brukerens egen skritt-data for perioden hvis inkludert
+    let currentUserSteps = 0;
+    let currentUserDistance = 0;
+    
+    if (includeCurrentUser) {
+      const { data: userStepDataList, error: userStepError } = await supabase
+        .from('step_data')
+        .select('steps, distance_meters')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .eq('user_id', userId);
+
+      if (!userStepError && userStepDataList) {
+        // Summer alle skritt og distanse i perioden
+        currentUserSteps = userStepDataList.reduce((sum, entry) => sum + (entry.steps || 0), 0);
+        currentUserDistance = userStepDataList.reduce((sum, entry) => sum + (entry.distance_meters || 0), 0);
+      }
+    }
+
+    // Kombiner venn-data med skritt-data
+    const friendsWithSteps: FriendStepData[] = [];
+    
+    // Legg til venner med skritt-data (summer alle dager i perioden)
+    friends?.forEach(friend => {
+      const friendStepDataList = friendsStepData?.filter(sd => sd.user_id === friend.id) || [];
+      const totalSteps = friendStepDataList.reduce((sum, entry) => sum + (entry.steps || 0), 0);
+      const totalDistance = friendStepDataList.reduce((sum, entry) => sum + (entry.distance_meters || 0), 0);
+      
+      friendsWithSteps.push({
+        id: friend.id,
+        username: friend.username,
+        full_name: friend.full_name,
+        avatar_url: friend.avatar_url,
+        steps: totalSteps,
+        distance_meters: totalDistance,
+        rank: 0, // Vil bli satt etter sortering
+      });
+    });
+
+    // Legg til brukeren selv hvis inkludert
+    if (includeCurrentUser) {
+      const { data: userProfile } = await supabase
+        .from('user_profiles')
+        .select('username, full_name, avatar_url')
+        .eq('id', userId)
+        .single();
+
+      if (userProfile) {
+        friendsWithSteps.push({
+          id: userId,
+          username: userProfile.username,
+          full_name: userProfile.full_name,
+          avatar_url: userProfile.avatar_url,
+          steps: currentUserSteps,
+          distance_meters: currentUserDistance,
+          rank: 0, // Vil bli satt etter sortering
+        });
+      }
+    }
+
+    // Sorter etter antall skritt (høyest først) og sett rank
+    friendsWithSteps.sort((a, b) => b.steps - a.steps);
+    friendsWithSteps.forEach((friend, index) => {
+      friend.rank = index + 1;
+    });
+
+    return { data: friendsWithSteps, error: null };
+  } catch (err: any) {
+    console.error('Error in getFriendsStepsForPeriod:', err);
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Hent dagens skritt-data for alle venner (inkludert brukeren selv)
+ * Sortert etter antall skritt (høyest først)
+ * (Wrapper for getFriendsStepsForPeriod for bakoverkompatibilitet)
+ */
+export const getFriendsTodaySteps = async (
+  userId: string,
+  includeCurrentUser: boolean = true
+): Promise<{ data: FriendStepData[] | null; error: any }> => {
+  const today = new Date().toISOString().split('T')[0];
+  return getFriendsStepsForPeriod(userId, today, today, includeCurrentUser);
+};
+

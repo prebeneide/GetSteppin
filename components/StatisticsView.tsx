@@ -228,7 +228,7 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
     // For year view, show monthly aggregates
     if (period === 'year') {
       const monthlyData = groupByMonth();
-      const maxSteps = Math.max(...monthlyData.map(m => m.steps), 1);
+      const maxSteps = 30000; // Fast maksverdi for bedre visuell sammenligning
       const chartHeight = 150;
 
       return (
@@ -264,7 +264,7 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
     }
 
     // For week and month, show daily data (smaller bars for month)
-    const maxSteps = getMaxSteps() || 1;
+    const maxSteps = 30000; // Fast maksverdi for bedre visuell sammenligning
     const chartHeight = 150;
     const isMonthView = period === 'month';
 

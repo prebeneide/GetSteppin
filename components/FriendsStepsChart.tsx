@@ -1,0 +1,684 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  TouchableOpacity,
+} from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { getFriendsStepsForPeriod, FriendStepData } from '../services/friendService';
+
+interface FriendsStepsChartProps {
+  userId: string | null;
+  isLoggedIn: boolean;
+}
+
+type Period = 'day' | 'week' | 'month' | 'year';
+
+// Farger for søylene - forskjellige farger for hver søyle
+const COLORS = [
+  '#1ED760', // Spotify green (for topp-plassering)
+  '#00D4FF', // Cyan
+  '#FF6B6B', // Red/Coral
+  '#4ECDC4', // Turquoise
+  '#FFE66D', // Yellow
+  '#95E1D3', // Mint
+  '#F38181', // Pink
+  '#AA96DA', // Purple
+  '#FCBAD3', // Light Pink
+  '#FFD3A5', // Peach
+  '#A8E6CF', // Light Green
+  '#C5E3F6', // Light Blue
+  '#FFAAA5', // Salmon
+  '#FFD93D', // Gold
+  '#6BCB77', // Green
+  '#4D96FF', // Blue
+  '#FF6B9D', // Hot Pink
+  '#C44569', // Deep Pink
+  '#F97F51', // Orange
+  '#F8B500', // Amber
+];
+
+export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsChartProps) {
+  const { user } = useAuth();
+  const [friendsSteps, setFriendsSteps] = useState<FriendStepData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
+  const [period, setPeriod] = useState<Period>('day');
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [yearOffset, setYearOffset] = useState(0);
+
+  useEffect(() => {
+    if (!isLoggedIn || !userId || !user) {
+      setLoading(false);
+      return;
+    }
+
+    loadFriendsSteps();
+  }, [userId, isLoggedIn, user, period, weekOffset, monthOffset, yearOffset]);
+
+  const getDateRange = (periodType: Period) => {
+    const today = new Date();
+    const endDate = new Date();
+    const startDate = new Date();
+    
+    switch (periodType) {
+      case 'day': {
+        startDate.setTime(today.getTime());
+        endDate.setTime(today.getTime());
+        break;
+      }
+      case 'week': {
+        const currentDay = today.getDay();
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+        
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - daysFromMonday + (weekOffset * 7));
+        monday.setHours(0, 0, 0, 0);
+        
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+        
+        startDate.setTime(monday.getTime());
+        endDate.setTime(sunday.getTime());
+        break;
+      }
+      case 'month': {
+        const targetMonth = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+        
+        startDate.setTime(targetMonth.getTime());
+        startDate.setHours(0, 0, 0, 0);
+        
+        endDate.setFullYear(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      }
+      case 'year': {
+        const targetYear = today.getFullYear() + yearOffset;
+        
+        startDate.setFullYear(targetYear, 0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        
+        endDate.setFullYear(targetYear, 11, 31);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      }
+    }
+    
+    return {
+      start: startDate.toISOString().split('T')[0],
+      end: endDate.toISOString().split('T')[0],
+    };
+  };
+
+  const getPeriodLabel = () => {
+    if (period === 'day') return 'I dag';
+    if (period === 'week') {
+      if (weekOffset === 0) return 'Denne uken';
+      if (weekOffset === -1) return 'Forrige uke';
+      return `Uke ${weekOffset < 0 ? Math.abs(weekOffset) : weekOffset + 1}`;
+    }
+    if (period === 'month') {
+      const targetMonth = new Date();
+      targetMonth.setMonth(targetMonth.getMonth() + monthOffset);
+      return targetMonth.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' });
+    }
+    const targetYear = new Date().getFullYear() + yearOffset;
+    return targetYear.toString();
+  };
+
+  const loadFriendsSteps = async () => {
+    if (!userId || !user) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { start, end } = getDateRange(period);
+      const { data, error: fetchError } = await getFriendsStepsForPeriod(userId, start, end, true);
+
+      if (fetchError) {
+        console.error('Error loading friends steps:', fetchError);
+        setError('Kunne ikke laste vennenes skritt');
+      } else {
+        setFriendsSteps(data || []);
+        
+        // Finn brukerens egen rank
+        const userData = data?.find(f => f.id === userId);
+        setCurrentUserRank(userData?.rank || null);
+
+        // Check competition achievements for this period
+        // Import checkCompetitionAchievements dynamically to avoid circular dependency
+        const { checkCompetitionAchievements } = await import('../services/achievementService');
+        if (userData && userData.rank <= 3) {
+          // Only check if user is in top 3
+          checkCompetitionAchievements(userId, period, undefined).catch(err => {
+            console.error('Error checking competition achievements:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error in loadFriendsSteps:', err);
+      setError('Noe gikk galt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isLoggedIn || !userId || !user) {
+    return null; // Ikke vis for ikke-innloggede brukere
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#1ED760" />
+        </View>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (friendsSteps.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>
+            Legg til venner for å se deres skritt!
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Bruk fast maksverdi på 30000 skritt for bedre visuell sammenligning
+  const maxSteps = 30000;
+  const chartMaxHeight = 200; // Maks høyde for søyler i pixels
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Text style={styles.title}>👥 Vennenes skritt</Text>
+          <Text style={styles.periodLabel}>{getPeriodLabel()}</Text>
+        </View>
+        {currentUserRank !== null && (
+          <Text style={styles.rankText}>
+            Du er på {currentUserRank}. plass!
+          </Text>
+        )}
+        
+        {/* Period Navigation */}
+        <View style={styles.periodNavigation}>
+          <TouchableOpacity
+            style={[styles.periodButton, period === 'day' && styles.periodButtonActive]}
+            onPress={() => {
+              setPeriod('day');
+              setWeekOffset(0);
+              setMonthOffset(0);
+              setYearOffset(0);
+            }}
+          >
+            <Text style={[styles.periodButtonText, period === 'day' && styles.periodButtonTextActive]}>
+              Dag
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.periodButton, period === 'week' && styles.periodButtonActive]}
+            onPress={() => {
+              setPeriod('week');
+              setWeekOffset(0);
+              setMonthOffset(0);
+              setYearOffset(0);
+            }}
+          >
+            <Text style={[styles.periodButtonText, period === 'week' && styles.periodButtonTextActive]}>
+              Uke
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.periodButton, period === 'month' && styles.periodButtonActive]}
+            onPress={() => {
+              setPeriod('month');
+              setWeekOffset(0);
+              setMonthOffset(0);
+              setYearOffset(0);
+            }}
+          >
+            <Text style={[styles.periodButtonText, period === 'month' && styles.periodButtonTextActive]}>
+              Måned
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.periodButton, period === 'year' && styles.periodButtonActive]}
+            onPress={() => {
+              setPeriod('year');
+              setWeekOffset(0);
+              setMonthOffset(0);
+              setYearOffset(0);
+            }}
+          >
+            <Text style={[styles.periodButtonText, period === 'year' && styles.periodButtonTextActive]}>
+              År
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Period Navigation Arrows */}
+        {period !== 'day' && (
+          <View style={styles.periodArrows}>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => {
+                if (period === 'week') setWeekOffset(weekOffset - 1);
+                if (period === 'month') setMonthOffset(monthOffset - 1);
+                if (period === 'year') setYearOffset(yearOffset - 1);
+              }}
+            >
+              <Text style={styles.arrowText}>←</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.arrowButton}
+              onPress={() => {
+                if (period === 'week') setWeekOffset(weekOffset + 1);
+                if (period === 'month') setMonthOffset(monthOffset + 1);
+                if (period === 'year') setYearOffset(yearOffset + 1);
+              }}
+            >
+              <Text style={styles.arrowText}>→</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+      
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chartContainer}
+        style={styles.scrollView}
+      >
+        {friendsSteps.map((friend, index) => {
+          const isCurrentUser = friend.id === userId;
+          const barHeight = maxSteps > 0 
+            ? (friend.steps / maxSteps) * chartMaxHeight 
+            : 0;
+          const color = COLORS[index % COLORS.length];
+          
+          return (
+            <View key={friend.id} style={styles.barWrapper}>
+              <View style={styles.barContainer}>
+                {/* Søyle-container med absolutt posisjonerte elementer */}
+                <View style={styles.barArea}>
+                  {/* Søyle */}
+                  <View
+                    style={[
+                      styles.bar,
+                      {
+                        height: Math.max(barHeight, 10), // Minimum 10px høyde
+                        backgroundColor: color,
+                      },
+                    ]}
+                  />
+                  
+                  {/* Profilbilde, pokal og skritt-tall plassert rett over baren */}
+                  {friend.steps > 0 && (
+                    <View
+                      style={[
+                        styles.overBarContent,
+                        {
+                          bottom: Math.max(barHeight, 10) + 8, // Plasser rett over baren (8px spacing)
+                        },
+                      ]}
+                    >
+                      {/* Pokal for leder (rank 1) */}
+                      {friend.rank === 1 && (
+                        <View style={styles.trophyContainer}>
+                          <Text style={styles.trophyEmoji}>🏆</Text>
+                        </View>
+                      )}
+                      
+                      {/* Profilbilde */}
+                      <View style={styles.avatarWrapper}>
+                        <View style={[styles.avatarContainer, isCurrentUser && styles.currentUserAvatar]}>
+                          {friend.avatar_url ? (
+                            <Image
+                              source={{ uri: friend.avatar_url }}
+                              style={styles.avatar}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.avatarPlaceholder, { backgroundColor: color }]}>
+                              <Text style={styles.avatarText}>
+                                {friend.username.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        
+                        {/* "Du" badge for current user - på profilbildet */}
+                        {isCurrentUser && (
+                          <View style={styles.currentUserBadge}>
+                            <Text style={styles.currentUserBadgeText}>Du</Text>
+                          </View>
+                        )}
+                      </View>
+                      
+                      {/* Skritt-tall */}
+                      {friend.steps > 0 && (
+                        <View style={styles.stepsLabel}>
+                          <Text style={styles.stepsText} numberOfLines={1}>
+                            {friend.steps.toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                {/* Rank */}
+                <View style={styles.rankContainer}>
+                  <Text style={styles.rankNumber}>{friend.rank}</Text>
+                </View>
+
+                {/* Brukernavn */}
+                <Text style={[styles.username, isCurrentUser && styles.currentUserUsername]} numberOfLines={1}>
+                  {friend.username}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    marginTop: 20,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  header: {
+    marginBottom: 15,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  periodLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  periodNavigation: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  periodButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  periodButtonActive: {
+    backgroundColor: '#1ED760',
+    borderColor: '#1ED760',
+  },
+  periodButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#666',
+  },
+  periodButtonTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  periodArrows: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 5,
+  },
+  arrowButton: {
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  arrowText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1ED760',
+  },
+  rankText: {
+    fontSize: 14,
+    color: '#1ED760',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#F44336',
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  scrollView: {
+    flexGrow: 0,
+  },
+  chartContainer: {
+    paddingRight: 10,
+    paddingTop: 80, // Gi plass for elementer over baren
+    alignItems: 'flex-end',
+    minHeight: 380, // Plass for barer (200) + elementer over (180)
+    overflow: 'visible', // Sørg for at elementer utenfor kan vises
+  },
+  barWrapper: {
+    marginHorizontal: 8,
+    alignItems: 'center',
+    width: 70,
+    overflow: 'visible', // Sørg for at elementer utenfor kan vises
+  },
+  barContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  barArea: {
+    position: 'relative',
+    width: '100%',
+    height: 300, // Gi nok plass for barer (200) + elementer over (100)
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'visible', // Sørg for at elementer utenfor kan vises
+  },
+  overBarContent: {
+    position: 'absolute',
+    alignItems: 'center',
+    width: '100%',
+    zIndex: 10,
+    left: 0,
+    right: 0,
+    transform: [{ translateY: -2 }], // Juster litt opp
+  },
+  trophyContainer: {
+    marginBottom: 4,
+    backgroundColor: '#FFD700',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  trophyEmoji: {
+    fontSize: 18,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginTop: 2,
+    marginBottom: 4,
+    width: 50,
+    height: 50,
+  },
+  avatarContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+  },
+  currentUserAvatar: {
+    borderColor: '#1ED760',
+    borderWidth: 3,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#fff',
+    textTransform: 'uppercase',
+  },
+  currentUserBadge: {
+    position: 'absolute',
+    bottom: -6,
+    right: -6,
+    backgroundColor: '#1ED760',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderWidth: 2.5,
+    borderColor: '#fff',
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  currentUserBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  bar: {
+    width: 40,
+    minHeight: 10,
+    borderRadius: 8,
+  },
+  stepsLabel: {
+    marginTop: 2,
+    marginBottom: 5,
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 16,
+  },
+  stepsText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  rankContainer: {
+    marginBottom: 5,
+  },
+  rankNumber: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  username: {
+    fontSize: 12,
+    color: '#333',
+    textAlign: 'center',
+    fontWeight: '500',
+    width: '100%',
+  },
+  currentUserUsername: {
+    color: '#1ED760',
+    fontWeight: '600',
+  },
+});
+

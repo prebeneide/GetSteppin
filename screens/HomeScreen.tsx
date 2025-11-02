@@ -11,6 +11,7 @@ import OnboardingScreen from './OnboardingScreen';
 import CircularProgress from '../components/CircularProgress';
 import StatisticsView from '../components/StatisticsView';
 import AchievementsView from '../components/AchievementsView';
+import FriendsStepsChart from '../components/FriendsStepsChart';
 
 interface HomeScreenProps {
   navigation: any;
@@ -409,10 +410,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <AchievementsView userId={user?.id || null} isLoggedIn={!!user} />
       </View>
 
-      {/* Statistics Section - Always show, works for both logged in and anonymous users */}
-      <View style={styles.statisticsWrapper}>
-        <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
-      </View>
+              {/* Statistics Section - Always show, works for both logged in and anonymous users */}
+              <View style={styles.statisticsWrapper}>
+                <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
+              </View>
+
+              {/* Friends Steps Chart - Only show if logged in */}
+              {user && (
+                <View style={styles.friendsChartWrapper}>
+                  <FriendsStepsChart userId={user.id} isLoggedIn={!!user} />
+                </View>
+              )}
 
               {/* Friends Section - Only show if logged in */}
               {user && (
@@ -753,6 +761,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   statisticsWrapper: {
+    width: '100%',
+  },
+  friendsChartWrapper: {
     width: '100%',
   },
   friendsSection: {

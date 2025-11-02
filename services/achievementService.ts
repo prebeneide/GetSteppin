@@ -476,6 +476,254 @@ export const checkStreakAchievement = async (
 };
 
 /**
+ * Check rank-based competition achievements (daily, weekly, monthly, yearly)
+ */
+export const checkCompetitionAchievements = async (
+  userId: string | null,
+  period: 'day' | 'week' | 'month' | 'year',
+  deviceId?: string | null
+): Promise<void> => {
+  try {
+    if (!userId) {
+      return; // Only logged-in users can have friends and compete
+    }
+
+    // Get device ID if not provided
+    if (!deviceId && !userId) {
+      deviceId = await getDeviceId();
+    }
+
+    // Get date range for the period
+    const today = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+    
+    switch (period) {
+      case 'day': {
+        startDate = new Date(today);
+        endDate = new Date(today);
+        break;
+      }
+      case 'week': {
+        const currentDay = today.getDay();
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - daysFromMonday);
+        monday.setHours(0, 0, 0, 0);
+        startDate = monday;
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23, 59, 59, 999);
+        endDate = sunday;
+        break;
+      }
+      case 'month': {
+        startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      }
+      case 'year': {
+        startDate = new Date(today.getFullYear(), 0, 1);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(today.getFullYear(), 11, 31);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      }
+    }
+
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    // Import getFriendsStepsForPeriod
+    const { getFriendsStepsForPeriod } = await import('./friendService');
+    
+    // Get friends' steps for the period (includes current user)
+    const { data: friendsSteps, error } = await getFriendsStepsForPeriod(
+      userId,
+      startDateStr,
+      endDateStr,
+      true
+    );
+
+    if (error || !friendsSteps || friendsSteps.length === 0) {
+      return; // No friends or error
+    }
+
+    // Find current user's rank
+    const currentUserData = friendsSteps.find(f => f.id === userId);
+    if (!currentUserData) {
+      return; // User not found in rankings
+    }
+
+    const rank = currentUserData.rank;
+    if (rank > 3) {
+      return; // Only award for top 3
+    }
+
+    // Determine achievement emoji based on period and rank
+    let achievementEmoji: string;
+    if (period === 'day') {
+      if (rank === 1) achievementEmoji = '🥇';
+      else if (rank === 2) achievementEmoji = '🥈';
+      else achievementEmoji = '🥉';
+    } else if (period === 'week') {
+      if (rank === 1) achievementEmoji = '🏆';
+      else if (rank === 2) achievementEmoji = '🥈';
+      else achievementEmoji = '🥉';
+    } else if (period === 'month') {
+      if (rank === 1) achievementEmoji = '👑';
+      else if (rank === 2) achievementEmoji = '💍';
+      else achievementEmoji = '💎';
+    } else { // year
+      if (rank === 1) achievementEmoji = '⭐';
+      else if (rank === 2) achievementEmoji = '🌟';
+      else achievementEmoji = '✨';
+    }
+
+    // Get achievement type
+    const achievementType = await getAchievementType(achievementEmoji);
+    if (!achievementType) {
+      return;
+    }
+
+    // Check if already awarded for this period
+    const periodKey = `${period}_${startDateStr}_${endDateStr}`;
+    let checkQuery = supabase
+      .from('achievement_log')
+      .select('id, metadata')
+      .eq('achievement_type_id', achievementType.id)
+      .eq('user_id', userId);
+
+    const { data: logs } = await checkQuery;
+
+    // Check if this period was already awarded (check metadata.period)
+    const existing = logs?.find(log => 
+      log.metadata && 
+      typeof log.metadata === 'object' && 
+      'period' in log.metadata &&
+      (log.metadata as any).period === periodKey
+    );
+
+    if (!existing) {
+      // Award the achievement
+      await awardAchievement(userId, null, achievementType.id, {
+        period: periodKey,
+        rank: rank,
+        startDate: startDateStr,
+        endDate: endDateStr,
+      });
+    }
+  } catch (err) {
+    console.error('Error in checkCompetitionAchievements:', err);
+  }
+};
+
+/**
+ * Check fun/milestone achievements
+ */
+export const checkFunAchievements = async (
+  userId: string | null,
+  steps: number,
+  dailyGoal: number | null,
+  deviceId?: string | null
+): Promise<void> => {
+  try {
+    if (!userId && !deviceId) {
+      deviceId = await getDeviceId();
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const hour = new Date().getHours();
+
+    // 🚀 Rakett - Over 20000 skritt på én dag
+    if (steps >= 20000) {
+      const rocketType = await getAchievementType('🚀');
+      if (rocketType) {
+        let checkQuery = supabase
+          .from('achievement_log')
+          .select('id')
+          .eq('achievement_type_id', rocketType.id)
+          .gte('earned_at', `${today}T00:00:00`)
+          .lt('earned_at', `${today}T23:59:59`);
+
+        if (userId) {
+          checkQuery = checkQuery.eq('user_id', userId);
+        } else {
+          checkQuery = checkQuery.eq('device_id', deviceId!).is('user_id', null);
+        }
+
+        const { data: existing } = await checkQuery.limit(1);
+        if (!existing || existing.length === 0) {
+          await awardAchievement(userId, deviceId || null, rocketType.id, {
+            steps,
+            date: today,
+          });
+        }
+      }
+    }
+
+    // 💯 Hundre - Nøyaktig 100 skritt (fun achievement)
+    if (steps === 100) {
+      const hundredType = await getAchievementType('💯');
+      if (hundredType) {
+        let checkQuery = supabase
+          .from('achievement_log')
+          .select('id')
+          .eq('achievement_type_id', hundredType.id)
+          .gte('earned_at', `${today}T00:00:00`)
+          .lt('earned_at', `${today}T23:59:59`);
+
+        if (userId) {
+          checkQuery = checkQuery.eq('user_id', userId);
+        } else {
+          checkQuery = checkQuery.eq('device_id', deviceId!).is('user_id', null);
+        }
+
+        const { data: existing } = await checkQuery.limit(1);
+        if (!existing || existing.length === 0) {
+          await awardAchievement(userId, deviceId || null, hundredType.id, {
+            steps,
+            date: today,
+          });
+        }
+      }
+    }
+
+    // 🎯 Bullseye - Nøyaktig dagens mål
+    if (dailyGoal && steps === dailyGoal) {
+      const bullseyeType = await getAchievementType('🎯');
+      if (bullseyeType) {
+        let checkQuery = supabase
+          .from('achievement_log')
+          .select('id')
+          .eq('achievement_type_id', bullseyeType.id)
+          .gte('earned_at', `${today}T00:00:00`)
+          .lt('earned_at', `${today}T23:59:59`);
+
+        if (userId) {
+          checkQuery = checkQuery.eq('user_id', userId);
+        } else {
+          checkQuery = checkQuery.eq('device_id', deviceId!).is('user_id', null);
+        }
+
+        const { data: existing } = await checkQuery.limit(1);
+        if (!existing || existing.length === 0) {
+          await awardAchievement(userId, deviceId || null, bullseyeType.id, {
+            steps,
+            goal: dailyGoal,
+            date: today,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in checkFunAchievements:', err);
+  }
+};
+
+/**
  * Check all achievements based on current step data
  */
 export const checkAllAchievements = async (
@@ -496,6 +744,14 @@ export const checkAllAchievements = async (
 
     // Check goal achievement
     await checkGoalAchievement(userId, steps, dailyGoal, deviceId || undefined);
+
+    // Check fun achievements
+    await checkFunAchievements(userId, steps, dailyGoal, deviceId || undefined);
+
+    // Check competition achievements (only for logged-in users with friends)
+    if (userId) {
+      await checkCompetitionAchievements(userId, 'day', deviceId || undefined);
+    }
 
     // Check streak achievement (runs less frequently, but we'll check daily)
     // We'll only check this once per day to avoid too many queries
