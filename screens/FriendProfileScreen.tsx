@@ -12,6 +12,87 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import StatisticsView from '../components/StatisticsView';
 import AchievementsView from '../components/AchievementsView';
+import OnlineIndicator from '../components/OnlineIndicator';
+import { getFriendCount } from '../services/friendService';
+import { getTotalSteps, getTotalDistanceKm } from '../services/stepService';
+
+/**
+ * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
+ */
+const isUserOnline = (lastActive: string | null | undefined): boolean => {
+  if (!lastActive) return false;
+  
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const tenMinutesInMs = 10 * 60 * 1000; // 10 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= tenMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
+
+/**
+ * Formaterer store tall på en lesbar måte
+ * F.eks: 1234 -> "1,2k", 1234567 -> "1,2M"
+ */
+const formatLargeNumber = (num: number | null): string => {
+  if (num === null || num === undefined) return '-';
+  
+  if (num < 1000) {
+    return num.toString();
+  } else if (num < 1000000) {
+    // Kilo: 1.2k, 12.3k, 123k
+    const thousands = num / 1000;
+    if (thousands >= 100) {
+      return `${Math.round(thousands)}k`;
+    }
+    return `${thousands.toFixed(1)}k`;
+  } else if (num < 1000000000) {
+    // Million: 1.2M, 12.3M, 123M
+    const millions = num / 1000000;
+    if (millions >= 100) {
+      return `${Math.round(millions)}M`;
+    }
+    return `${millions.toFixed(1)}M`;
+  } else {
+    // Milliard: 1.2B
+    const billions = num / 1000000000;
+    return `${billions.toFixed(1)}B`;
+  }
+};
+
+/**
+ * Formaterer km-tall på en lesbar måte
+ * F.eks: 12.3, 123.4, 1234.5, 12.3k
+ */
+const formatKm = (km: number | null): string => {
+  if (km === null || km === undefined) return '-';
+  
+  if (km < 1000) {
+    // Vis med én desimal for små tall
+    return `${km.toFixed(1)}`;
+  } else if (km < 1000000) {
+    // Kilo: 1.2k km, 12.3k km
+    const thousands = km / 1000;
+    if (thousands >= 100) {
+      return `${Math.round(thousands)}k`;
+    }
+    return `${thousands.toFixed(1)}k`;
+  } else if (km < 1000000000) {
+    // Million: 1.2M km
+    const millions = km / 1000000;
+    if (millions >= 100) {
+      return `${Math.round(millions)}M`;
+    }
+    return `${millions.toFixed(1)}M`;
+  } else {
+    // Milliard: 1.2B km
+    const billions = km / 1000000000;
+    return `${billions.toFixed(1)}B`;
+  }
+};
 
 interface FriendProfileScreenProps {
   navigation: any;
@@ -24,12 +105,21 @@ interface FriendProfileScreenProps {
   };
 }
 
+interface UserProfile {
+  id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  daily_step_goal: number | null;
+}
+
 interface FriendProfile {
   id: string;
   username: string;
   full_name: string | null;
   avatar_url: string | null;
   daily_step_goal: number | null;
+  bio: string | null;
 }
 
 export default function FriendProfileScreen({
@@ -40,8 +130,12 @@ export default function FriendProfileScreen({
   const initialUsername = route?.params?.friendUsername;
   const initialAvatarUrl = route?.params?.friendAvatarUrl;
   const [profile, setProfile] = useState<FriendProfile | null>(null);
+  const [lastActive, setLastActive] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [friendCount, setFriendCount] = useState<number | null>(null);
+  const [totalSteps, setTotalSteps] = useState<number | null>(null);
+  const [totalKm, setTotalKm] = useState<number | null>(null);
 
   useEffect(() => {
     if (friendId) {
@@ -67,7 +161,7 @@ export default function FriendProfileScreen({
     try {
       const { data, error: profileError } = await supabase
         .from('user_profiles')
-        .select('id, username, full_name, avatar_url, daily_step_goal')
+        .select('id, username, full_name, avatar_url, daily_step_goal, bio')
         .eq('id', friendId)
         .single();
 
@@ -76,6 +170,37 @@ export default function FriendProfileScreen({
         setError('Kunne ikke laste vennens profil');
       } else if (data) {
         setProfile(data);
+      }
+
+      // Hent siste aktivitet (last_active) fra step_data
+      const { data: stepData } = await supabase
+        .from('step_data')
+        .select('updated_at')
+        .eq('user_id', friendId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (stepData?.updated_at) {
+        setLastActive(stepData.updated_at);
+      }
+
+      // Hent antall venner
+      const { data: friendsCount, error: friendsError } = await getFriendCount(friendId);
+      if (!friendsError && friendsCount !== null) {
+        setFriendCount(friendsCount);
+      }
+
+      // Hent totalt antall steg
+      const { data: totalStepsData, error: stepsError } = await getTotalSteps(friendId);
+      if (!stepsError && totalStepsData !== null) {
+        setTotalSteps(totalStepsData);
+      }
+
+      // Hent totalt antall km
+      const { data: totalKmData, error: kmError } = await getTotalDistanceKm(friendId);
+      if (!kmError && totalKmData !== null) {
+        setTotalKm(totalKmData);
       }
     } catch (err) {
       console.error('Error in loadFriendProfile:', err);
@@ -144,21 +269,56 @@ export default function FriendProfileScreen({
 
       {/* Profile Info Section */}
       <View style={styles.profileSection}>
-        <View style={styles.avatarContainer}>
-          {displayAvatarUrl ? (
-            <Image source={{ uri: displayAvatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarPlaceholderText}>
-                {displayUsername.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+        <View style={styles.avatarWrapper}>
+          <View style={styles.avatarContainer}>
+            {displayAvatarUrl ? (
+              <Image source={{ uri: displayAvatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarPlaceholderText}>
+                  {displayUsername.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </View>
+          <OnlineIndicator isOnline={isUserOnline(lastActive)} size="large" />
         </View>
         <Text style={styles.username}>{displayUsername}</Text>
         {profile.full_name && (
           <Text style={styles.fullName}>{profile.full_name}</Text>
         )}
+
+        {/* Bio Section */}
+        {profile.bio && (
+          <View style={styles.bioContainer}>
+            <Text style={styles.bioText}>{profile.bio}</Text>
+          </View>
+        )}
+
+        {/* Stats Section (Instagram-style) */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {formatLargeNumber(friendCount)}
+            </Text>
+            <Text style={styles.statLabel}>venner</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {formatLargeNumber(totalSteps)}
+            </Text>
+            <Text style={styles.statLabel}>skritt totalt</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>
+              {formatKm(totalKm)}
+            </Text>
+            <Text style={styles.statLabel}>km totalt</Text>
+          </View>
+        </View>
+
         {profile.daily_step_goal && (
           <View style={styles.goalContainer}>
             <Text style={styles.goalLabel}>Daglig mål</Text>
@@ -171,13 +331,11 @@ export default function FriendProfileScreen({
 
       {/* Statistics Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Statistikk</Text>
         <StatisticsView userId={friendId} isLoggedIn={true} />
       </View>
 
       {/* Achievements Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Prestasjoner</Text>
         <AchievementsView userId={friendId} isLoggedIn={true} />
       </View>
     </ScrollView>
@@ -245,25 +403,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9f9f9',
     marginBottom: 20,
   },
-  avatarContainer: {
+  avatarWrapper: {
+    position: 'relative',
     marginBottom: 15,
   },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  avatarContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
     borderWidth: 3,
     borderColor: '#1ED760',
   },
+  avatar: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
   avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: '#1ED760',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#1ED760',
   },
   avatarPlaceholderText: {
     fontSize: 40,
@@ -279,7 +442,39 @@ const styles = StyleSheet.create({
   fullName: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 15,
+    marginBottom: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  statDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#e0e0e0',
+    marginHorizontal: 20,
   },
   goalContainer: {
     alignItems: 'center',
@@ -309,6 +504,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 15,
+  },
+  bioContainer: {
+    marginTop: 10,
+    marginBottom: 20,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 300,
+  },
+  bioText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });
 

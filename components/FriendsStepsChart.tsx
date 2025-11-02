@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { getFriendsStepsForPeriod, FriendStepData } from '../services/friendService';
+import OnlineIndicator from './OnlineIndicator';
 
 interface FriendsStepsChartProps {
   userId: string | null;
@@ -41,6 +42,101 @@ const COLORS = [
   '#F97F51', // Orange
   '#F8B500', // Amber
 ];
+
+/**
+ * Sjekker om en bruker er aktiv/online (har oppdatert skritt-data innenfor siste 30 minutter)
+ * Brukes for å vise aktivitetsindikator (gange/løpe emoji)
+ */
+const isUserActive = (lastActive: string): boolean => {
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const thirtyMinutesInMs = 30 * 60 * 1000; // 30 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= thirtyMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
+
+/**
+ * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
+ * Brukes for å vise grønn online-indikator
+ */
+const isUserOnline = (lastActive: string | null | undefined): boolean => {
+  if (!lastActive) return false;
+  
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const tenMinutesInMs = 10 * 60 * 1000; // 10 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= tenMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
+
+/**
+ * Bestemmer aktivitetstype basert på hastighet (distanse per tid)
+ * Bruker endringer i skritt og distanse over tid for mer nøyaktig beregning
+ * - Gange: ~4-6 km/t (1.1-1.7 m/s)
+ * - Jogging: ~8-12 km/t (2.2-3.3 m/s)
+ * - Løping: >12 km/t (>3.3 m/s)
+ */
+const getActivityType = (friend: FriendStepData): 'walking' | 'jogging' | 'running' | null => {
+  // Trenger både siste oppdatering og forrige oppdatering for å beregne hastighet
+  if (!friend.last_active || !friend.previous_update_time || !friend.previous_steps || !friend.previous_distance) {
+    return null; // Ikke nok data for beregning
+  }
+  
+  try {
+    const lastActiveTime = new Date(friend.last_active).getTime();
+    const previousUpdateTime = new Date(friend.previous_update_time).getTime();
+    
+    // Sjekk at forrige oppdatering ikke er for lenge siden (max 1 time for nøyaktighet)
+    const timeDiffMs = lastActiveTime - previousUpdateTime;
+    const oneHourInMs = 60 * 60 * 1000;
+    
+    if (timeDiffMs <= 0 || timeDiffMs > oneHourInMs) {
+      return null; // For langt tidsspenn eller ugyldig
+    }
+    
+    // Beregn endringer
+    const stepsDiff = friend.steps - friend.previous_steps;
+    const distanceDiff = friend.distance_meters - friend.previous_distance;
+    
+    if (stepsDiff <= 0 || distanceDiff <= 0) {
+      return null; // Ingen endring eller negativ endring
+    }
+    
+    // Beregn hastighet: distanse per tid
+    const timeDiffHours = timeDiffMs / (1000 * 60 * 60); // Konverter til timer
+    const speedKmh = (distanceDiff / 1000) / timeDiffHours; // km/t
+    
+    // Eller beregn i m/s for mer nøyaktighet
+    const timeDiffSeconds = timeDiffMs / 1000;
+    const speedMs = distanceDiff / timeDiffSeconds; // m/s
+    
+    // Bestem aktivitetstype basert på hastighet
+    // Gange: ~4-6 km/t (1.1-1.7 m/s)
+    // Jogging: ~8-12 km/t (2.2-3.3 m/s)  
+    // Løping: >12 km/t (>3.3 m/s)
+    
+    if (speedMs >= 3.3 || speedKmh >= 12) {
+      return 'running'; // Løping
+    } else if (speedMs >= 2.2 || speedKmh >= 8) {
+      return 'jogging'; // Jogging
+    } else if (speedMs >= 1.1 || speedKmh >= 4) {
+      return 'walking'; // Gange
+    }
+    
+    return null; // For lav hastighet
+  } catch (err) {
+    console.error('Error calculating activity type:', err);
+    return null;
+  }
+};
 
 export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsChartProps) {
   const { user } = useAuth();
@@ -216,8 +312,30 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     );
   }
 
-  // Bruk fast maksverdi på 30000 skritt for bedre visuell sammenligning
-  const maxSteps = 30000;
+  // Beregn dynamisk maksverdi basert på faktiske data for bedre visuell sammenligning
+  const calculateMaxSteps = (steps: number[]): number => {
+    if (steps.length === 0) return 1000;
+    
+    const maxStepValue = Math.max(...steps);
+    
+    if (maxStepValue === 0) return 1000;
+    
+    // Hvis maksverdien er lav (< 2000), sett maks til maksverdi * 1.3 (min 1000)
+    if (maxStepValue < 2000) {
+      return Math.max(maxStepValue * 1.3, 1000);
+    }
+    
+    // Hvis maksverdien er middels (2000-15000), sett maks til maksverdi * 1.2
+    if (maxStepValue < 15000) {
+      return maxStepValue * 1.2;
+    }
+    
+    // Hvis maksverdien er høy (>= 15000), sett maks til maksverdi * 1.1, men max 35000
+    return Math.min(maxStepValue * 1.1, 35000);
+  };
+
+  const stepValues = friendsSteps.map(f => f.steps);
+  const maxSteps = calculateMaxSteps(stepValues);
   const chartMaxHeight = 200; // Maks høyde for søyler i pixels
 
   return (
@@ -379,6 +497,29 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
                             </View>
                           )}
                         </View>
+                        {/* Online indikator - grønn prikk hvis bruker har vært innlogget siste 10 minutter */}
+                        {/* Plassert utenfor avatarContainer slik at den ikke kutter av prikken */}
+                        <OnlineIndicator isOnline={isUserOnline(friend.last_active)} size="medium" />
+                        
+                        {/* Aktivitetindikator - emoji hvis aktiv innenfor siste 30 minutter */}
+                        {friend.last_active && isUserActive(friend.last_active) && (() => {
+                          const activityType = getActivityType(friend);
+                          let emoji = '🚶'; // Default: gange
+                          
+                          if (activityType === 'running') {
+                            emoji = '🏃'; // Løping
+                          } else if (activityType === 'jogging') {
+                            emoji = '🏃'; // Jogging (samme emoji, eller bruk 🏃‍♀️/🏃‍♂️)
+                          } else if (activityType === 'walking') {
+                            emoji = '🚶'; // Gange
+                          }
+                          
+                          return (
+                            <View style={styles.activeIndicator}>
+                              <Text style={styles.activeEmoji}>{emoji}</Text>
+                            </View>
+                          );
+                        })()}
                         
                         {/* "Du" badge for current user - på profilbildet */}
                         {isCurrentUser && (
@@ -594,6 +735,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     width: 50,
     height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarContainer: {
     width: 50,
@@ -622,6 +765,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     textTransform: 'uppercase',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#1ED760',
+    zIndex: 15,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  activeEmoji: {
+    fontSize: 14,
   },
   currentUserBadge: {
     position: 'absolute',

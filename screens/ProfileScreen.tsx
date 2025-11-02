@@ -8,12 +8,14 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
+import OnlineIndicator from '../components/OnlineIndicator';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -25,6 +27,7 @@ interface UserProfile {
   email: string | null;
   daily_step_goal: number | null;
   avatar_url: string | null;
+  bio: string | null;
 }
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
@@ -35,6 +38,9 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const [anonymousGoal, setAnonymousGoal] = useState<number | null>(null);
   const [anonymousAvatarUrl, setAnonymousAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [bio, setBio] = useState('');
+  const [editingBio, setEditingBio] = useState(false);
+  const [savingBio, setSavingBio] = useState(false);
 
   useEffect(() => {
     loadProfile();
@@ -54,7 +60,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         // For logged in users, load from user_profiles
         const { data, error } = await supabase
           .from('user_profiles')
-          .select('username, full_name, email, daily_step_goal, avatar_url')
+          .select('username, full_name, email, daily_step_goal, avatar_url, bio')
           .eq('id', user.id)
           .single();
 
@@ -62,6 +68,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           console.error('Error loading profile:', error);
         } else if (data) {
           setProfile(data);
+          setBio(data.bio || '');
           setIsAnonymous(false);
         }
       } else {
@@ -335,6 +342,32 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     }
   };
 
+  const handleSaveBio = async () => {
+    if (!user) return;
+
+    setSavingBio(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ bio: bio.trim() || null })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error saving bio:', error);
+        Alert.alert('Feil', 'Kunne ikke lagre bio. Prøv igjen senere.');
+      } else {
+        // Update local profile state
+        setProfile({ ...profile!, bio: bio.trim() || null });
+        setEditingBio(false);
+      }
+    } catch (err) {
+      console.error('Error saving bio:', err);
+      Alert.alert('Feil', 'Noe gikk galt. Prøv igjen senere.');
+    } finally {
+      setSavingBio(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -369,34 +402,38 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         {/* Profile Picture Section */}
         <View style={styles.avatarSection}>
-          <TouchableOpacity 
-            style={styles.avatarContainer}
-            onPress={pickImage}
-            disabled={uploading}
-          >
-            {(user && profile?.avatar_url) || (!user && anonymousAvatarUrl) ? (
-              <Image
-                source={{ uri: user ? profile!.avatar_url! : anonymousAvatarUrl! }}
-                style={styles.avatar}
-                resizeMode="cover"
-              />
-            ) : user ? (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarPlaceholderText}>
-                  {profile?.username?.charAt(0).toUpperCase() || '?'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarPlaceholderText}>📷</Text>
-              </View>
-            )}
-            {uploading && (
-              <View style={styles.avatarOverlay}>
-                <ActivityIndicator size="small" color="#fff" />
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.avatarWrapper}>
+            <TouchableOpacity 
+              style={styles.avatarContainer}
+              onPress={pickImage}
+              disabled={uploading}
+            >
+              {(user && profile?.avatar_url) || (!user && anonymousAvatarUrl) ? (
+                <Image
+                  source={{ uri: user ? profile!.avatar_url! : anonymousAvatarUrl! }}
+                  style={styles.avatar}
+                  resizeMode="cover"
+                />
+              ) : user ? (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarPlaceholderText}>
+                    {profile?.username?.charAt(0).toUpperCase() || '?'}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarPlaceholderText}>📷</Text>
+                </View>
+              )}
+              {uploading && (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+            {/* Online indikator for egen bruker - alltid online når innlogget */}
+            {user && <OnlineIndicator isOnline={true} size="large" />}
+          </View>
           <TouchableOpacity 
             style={styles.changePhotoButton}
             onPress={pickImage}
@@ -470,6 +507,79 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
         ) : null}
 
+        {/* Bio Section - Only for logged in users */}
+        {user && profile && (
+          <View style={styles.section}>
+            <View style={styles.bioHeader}>
+              <Text style={styles.sectionTitle}>Bio</Text>
+              {!editingBio && (
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => setEditingBio(true)}
+                >
+                  <Text style={styles.editButtonText}>Rediger</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {editingBio ? (
+              <View style={styles.bioEditContainer}>
+                <TextInput
+                  style={styles.bioInput}
+                  placeholder="Skriv en kort beskrivelse om deg selv..."
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  numberOfLines={4}
+                  maxLength={200}
+                  autoCapitalize="sentences"
+                  textAlignVertical="top"
+                />
+                <Text style={styles.bioCharCount}>
+                  {bio.length}/200 tegn
+                </Text>
+                <View style={styles.bioButtonRow}>
+                  <TouchableOpacity
+                    style={[styles.bioButton, styles.bioCancelButton]}
+                    onPress={() => {
+                      setBio(profile.bio || '');
+                      setEditingBio(false);
+                    }}
+                    disabled={savingBio}
+                  >
+                    <Text style={styles.bioCancelButtonText}>Avbryt</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.bioButton,
+                      styles.bioSaveButton,
+                      savingBio && styles.bioButtonDisabled,
+                    ]}
+                    onPress={handleSaveBio}
+                    disabled={savingBio}
+                  >
+                    {savingBio ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.bioSaveButtonText}>Lagre</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.bioDisplayContainer}>
+                {profile.bio ? (
+                  <Text style={styles.bioText}>{profile.bio}</Text>
+                ) : (
+                  <Text style={styles.bioPlaceholder}>
+                    Ingen bio satt. Trykk på "Rediger" for å legge til en bio.
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Settings Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Innstillinger</Text>
@@ -478,7 +588,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             style={styles.settingsButton}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Text style={styles.settingsButtonText}>⚙️ Daglig mål</Text>
+            <Text style={styles.settingsButtonText}>⚙️ Innstillinger</Text>
             <Text style={styles.settingsButtonArrow}>→</Text>
           </TouchableOpacity>
         </View>
@@ -538,6 +648,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginBottom: 15,
+  },
   avatarContainer: {
     width: 120,
     height: 120,
@@ -546,7 +660,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    marginBottom: 15,
     borderWidth: 3,
     borderColor: '#1ED760',
   },
@@ -663,6 +776,91 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  bioHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  editButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  editButtonText: {
+    fontSize: 14,
+    color: '#1ED760',
+    fontWeight: '600',
+  },
+  bioEditContainer: {
+    marginTop: 8,
+  },
+  bioInput: {
+    borderWidth: 2,
+    borderColor: '#1ED760',
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+    minHeight: 100,
+    maxHeight: 150,
+  },
+  bioCharCount: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: 5,
+  },
+  bioButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 12,
+  },
+  bioButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  bioCancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  bioCancelButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  bioSaveButton: {
+    backgroundColor: '#1ED760',
+  },
+  bioSaveButtonText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  bioButtonDisabled: {
+    backgroundColor: '#cccccc',
+  },
+  bioDisplayContainer: {
+    marginTop: 8,
+    padding: 15,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    minHeight: 50,
+  },
+  bioText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+  },
+  bioPlaceholder: {
+    fontSize: 14,
+    color: '#999',
+    fontStyle: 'italic',
   },
 });
 

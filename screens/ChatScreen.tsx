@@ -23,6 +23,24 @@ import {
 } from '../services/chatService';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import OnlineIndicator from '../components/OnlineIndicator';
+
+/**
+ * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
+ */
+const isUserOnline = (lastActive: string | null | undefined): boolean => {
+  if (!lastActive) return false;
+  
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const tenMinutesInMs = 10 * 60 * 1000; // 10 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= tenMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
 
 interface ChatScreenProps {
   navigation: any;
@@ -49,6 +67,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
     username: string;
     avatar_url: string | null;
   } | null>(null);
+  const [lastActive, setLastActive] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
 
@@ -108,6 +127,20 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
 
       if (!error && data) {
         setFriendProfile(data);
+      }
+
+      // Hent siste aktivitet (last_active) fra step_data
+      const { data: stepData } = await supabase
+        .from('step_data')
+        .select('updated_at')
+        .eq('user_id', friendId)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (stepData && stepData.length > 0 && stepData[0].updated_at) {
+        setLastActive(stepData[0].updated_at);
+      } else {
+        setLastActive(null);
       }
     } catch (err) {
       console.error('Error loading friend profile:', err);
@@ -215,15 +248,18 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           <Text style={styles.backButtonText}>← Tilbake</Text>
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          {displayAvatarUrl ? (
-            <Image source={{ uri: displayAvatarUrl }} style={styles.headerAvatar} />
-          ) : (
-            <View style={styles.headerAvatarPlaceholder}>
-              <Text style={styles.headerAvatarText}>
-                {displayUsername.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <View style={styles.headerAvatarWrapper}>
+            {displayAvatarUrl ? (
+              <Image source={{ uri: displayAvatarUrl }} style={styles.headerAvatar} />
+            ) : (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={styles.headerAvatarText}>
+                  {displayUsername.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <OnlineIndicator isOnline={isUserOnline(lastActive)} size="small" />
+          </View>
           <Text style={styles.headerTitle}>{displayUsername}</Text>
         </View>
         <View style={styles.headerSpacer} />
@@ -334,6 +370,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     gap: 10,
+  },
+  headerAvatarWrapper: {
+    position: 'relative',
   },
   headerAvatar: {
     width: 32,

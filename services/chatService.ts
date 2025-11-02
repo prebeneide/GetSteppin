@@ -23,6 +23,7 @@ export interface ChatConversation {
   avatar_url: string | null;
   last_message: Message | null;
   unread_count: number;
+  last_active?: string | null; // Timestamp for when user last updated step data
 }
 
 /**
@@ -182,6 +183,23 @@ export const getConversations = async (
       return { data: null, error: profilesError };
     }
 
+    // Hent siste aktivitet (last_active) fra step_data for hver samtalepartner
+    const { data: stepData } = await supabase
+      .from('step_data')
+      .select('user_id, updated_at')
+      .in('user_id', otherUserIds)
+      .order('updated_at', { ascending: false });
+
+    // Opprett et map for rask oppslag av siste aktivitet
+    const lastActiveMap = new Map<string, string>();
+    if (stepData) {
+      stepData.forEach(entry => {
+        if (!lastActiveMap.has(entry.user_id) && entry.updated_at) {
+          lastActiveMap.set(entry.user_id, entry.updated_at);
+        }
+      });
+    }
+
     // Kombiner meldinger med profilinfo
     const conversations: ChatConversation[] = Array.from(conversationsMap.entries()).map(
       ([otherUserId, conversationData]) => {
@@ -193,13 +211,18 @@ export const getConversations = async (
         );
         const lastMessage = sortedMessages.length > 0 ? sortedMessages[0] : null;
 
+        // Sjekk at brukernavn ikke er en email
+        const username = profile?.username?.trim() || '';
+        const displayUsername = (username !== '' && !username.includes('@')) ? username : 'Ukjent';
+        
         return {
           user_id: otherUserId,
-          username: profile?.username || 'Ukjent',
+          username: displayUsername,
           full_name: profile?.full_name || null,
           avatar_url: profile?.avatar_url || null,
           last_message: lastMessage,
           unread_count: conversationData.unread_count,
+          last_active: lastActiveMap.get(otherUserId) || null,
         };
       }
     );

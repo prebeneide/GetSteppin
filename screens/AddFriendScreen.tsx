@@ -159,7 +159,7 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Søk etter brukernavn..."
+          placeholder="Søk etter brukernavn eller e-post..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}

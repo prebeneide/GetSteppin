@@ -19,11 +19,12 @@ interface StepDataEntry {
 interface StatisticsViewProps {
   userId?: string | null;
   isLoggedIn: boolean;
+  showTitle?: boolean; // Optional: show title (default: true)
 }
 
 type Period = 'week' | 'month' | 'year';
 
-export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewProps) {
+export default function StatisticsView({ userId, isLoggedIn, showTitle = true }: StatisticsViewProps) {
   const [period, setPeriod] = useState<Period>('week');
   const [weekOffset, setWeekOffset] = useState(0); // 0 = this week, -1 = last week, etc.
   const [monthOffset, setMonthOffset] = useState(0); // 0 = this month, -1 = last month, etc.
@@ -214,6 +215,28 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
     })).sort((a, b) => a.month.localeCompare(b.month));
   };
 
+  // Beregn dynamisk maksverdi basert på faktiske data for bedre visuell sammenligning
+  const calculateMaxSteps = (steps: number[]): number => {
+    if (steps.length === 0) return 1000;
+    
+    const maxStepValue = Math.max(...steps);
+    
+    if (maxStepValue === 0) return 1000;
+    
+    // Hvis maksverdien er lav (< 2000), sett maks til maksverdi * 1.3 (min 1000)
+    if (maxStepValue < 2000) {
+      return Math.max(maxStepValue * 1.3, 1000);
+    }
+    
+    // Hvis maksverdien er middels (2000-15000), sett maks til maksverdi * 1.2
+    if (maxStepValue < 15000) {
+      return maxStepValue * 1.2;
+    }
+    
+    // Hvis maksverdien er høy (>= 15000), sett maks til maksverdi * 1.1, men max 35000
+    return Math.min(maxStepValue * 1.1, 35000);
+  };
+
   const renderBarChart = () => {
     if (stepData.length === 0) {
       return (
@@ -228,7 +251,8 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
     // For year view, show monthly aggregates
     if (period === 'year') {
       const monthlyData = groupByMonth();
-      const maxSteps = 30000; // Fast maksverdi for bedre visuell sammenligning
+      const monthlySteps = monthlyData.map(m => m.steps);
+      const maxSteps = calculateMaxSteps(monthlySteps);
       const chartHeight = 150;
 
       return (
@@ -264,7 +288,8 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
     }
 
     // For week and month, show daily data (smaller bars for month)
-    const maxSteps = 30000; // Fast maksverdi for bedre visuell sammenligning
+    const dailySteps = stepData.map(d => d.steps);
+    const maxSteps = calculateMaxSteps(dailySteps);
     const chartHeight = 150;
     const isMonthView = period === 'month';
 
@@ -310,7 +335,7 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Statistikk</Text>
+        {showTitle && <Text style={styles.title}>Statistikk</Text>}
         
         {/* Period Navigation */}
         <View style={styles.periodNavigation}>

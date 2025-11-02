@@ -12,6 +12,7 @@ import CircularProgress from '../components/CircularProgress';
 import StatisticsView from '../components/StatisticsView';
 import AchievementsView from '../components/AchievementsView';
 import FriendsStepsChart from '../components/FriendsStepsChart';
+import OnlineIndicator from '../components/OnlineIndicator';
 
 interface HomeScreenProps {
   navigation: any;
@@ -322,6 +323,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <View style={styles.menuIconLine} />
               </View>
             )}
+            {/* Online indikator for egen bruker - alltid online når innlogget */}
+            {user && <OnlineIndicator isOnline={true} size="small" />}
           </View>
         </TouchableOpacity>
       </View>
@@ -508,6 +511,7 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
   profileIconCircle: {
     width: 40,

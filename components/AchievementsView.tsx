@@ -5,9 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TouchableOpacity,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
+import { getPreliminaryAchievements } from '../services/achievementService';
 
 interface Achievement {
   id: string;
@@ -18,25 +22,41 @@ interface Achievement {
   count: number;
   first_earned_at: string;
   last_earned_at: string;
+  isPreliminary?: boolean; // For foreløpige prestasjoner
 }
 
 interface AchievementsViewProps {
   userId: string | null;
   isLoggedIn: boolean;
+  showTitle?: boolean; // Optional: show title (default: true)
 }
 
-export default function AchievementsView({ userId, isLoggedIn }: AchievementsViewProps) {
+export default function AchievementsView({ userId, isLoggedIn, showTitle = true }: AchievementsViewProps) {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAllModal, setShowAllModal] = useState(false);
 
   useEffect(() => {
     loadAchievements();
   }, [userId, isLoggedIn]);
 
+  // Oppdater foreløpige prestasjoner hvert 30. sekund for å vise nåværende ranking
+  useEffect(() => {
+    if (!isLoggedIn || !userId) return;
+
+    const interval = setInterval(() => {
+      loadAchievements(); // Reload for å oppdatere foreløpige prestasjoner
+    }, 30000); // Hvert 30. sekund
+
+    return () => clearInterval(interval);
+  }, [userId, isLoggedIn]);
+
   const loadAchievements = async () => {
     setLoading(true);
     setError(null);
+    
+    console.log('[AchievementsView] loadAchievements called - isLoggedIn:', isLoggedIn, 'userId:', userId);
     
     try {
       let query = supabase
@@ -80,48 +100,148 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
           count: item.count || 1,
           first_earned_at: item.first_earned_at,
           last_earned_at: item.last_earned_at,
+          isPreliminary: false, // Permanente prestasjoner
         }));
+
+        console.log('[AchievementsView] Loaded permanent achievements:', transformed.length);
+
+        // Hent foreløpige prestasjoner (kun for innloggede brukere med venner)
+        let preliminaryAchievements: Achievement[] = [];
+        console.log('[AchievementsView] Checking if should load preliminary - isLoggedIn:', isLoggedIn, 'userId:', userId);
         
-        setAchievements(transformed);
+        if (isLoggedIn && userId) {
+          try {
+            console.log('[AchievementsView] ✅ Fetching preliminary achievements for userId:', userId);
+            
+            // Hent foreløpige prestasjoner for dag, uke og måned
+            const dailyPreliminary = await getPreliminaryAchievements(userId, 'day');
+            const weeklyPreliminary = await getPreliminaryAchievements(userId, 'week');
+            const monthlyPreliminary = await getPreliminaryAchievements(userId, 'month');
+
+            console.log('[AchievementsView] ✅ Preliminary achievements received:', {
+              daily: dailyPreliminary,
+              weekly: weeklyPreliminary,
+              monthly: monthlyPreliminary,
+            });
+
+            // Kombiner alle foreløpige prestasjoner
+            console.log('[AchievementsView] Daily preliminary (raw):', dailyPreliminary, 'Type:', typeof dailyPreliminary, 'Is Array:', Array.isArray(dailyPreliminary));
+            console.log('[AchievementsView] Weekly preliminary (raw):', weeklyPreliminary, 'Type:', typeof weeklyPreliminary, 'Is Array:', Array.isArray(weeklyPreliminary));
+            console.log('[AchievementsView] Monthly preliminary (raw):', monthlyPreliminary, 'Type:', typeof monthlyPreliminary, 'Is Array:', Array.isArray(monthlyPreliminary));
+            
+            const allPreliminaryEmojis = [
+              ...(Array.isArray(dailyPreliminary) ? dailyPreliminary : []),
+              ...(Array.isArray(weeklyPreliminary) ? weeklyPreliminary : []),
+              ...(Array.isArray(monthlyPreliminary) ? monthlyPreliminary : []),
+            ].filter((emoji): emoji is string => {
+              const isValid = typeof emoji === 'string' && emoji.trim() !== '' && emoji.length > 0;
+              if (!isValid) {
+                console.log('[AchievementsView] Filtered out invalid emoji:', emoji, 'Type:', typeof emoji);
+              }
+              return isValid;
+            }); // Filtrer ut tomme strenger og ugyldige verdier
+
+            console.log('[AchievementsView] ✅ All preliminary emojis (filtered):', allPreliminaryEmojis, 'Count:', allPreliminaryEmojis.length);
+
+            // Hent achievement types for foreløpige prestasjoner
+            const emojiToName: { [key: string]: string } = {
+              '🥇': 'Dagens gull',
+              '🥈': 'Dagens sølv',
+              '🥉': 'Dagens bronse',
+              '🏆': 'Ukesvinner',
+              '👑': 'Månedens vinner',
+            };
+
+            const emojiToDescription: { [key: string]: string } = {
+              '🥇': '1. plass blant venner i dag (foreløpig)',
+              '🥈': '2. plass blant venner i dag (foreløpig)',
+              '🥉': '3. plass blant venner i dag (foreløpig)',
+              '🏆': '1. plass blant venner denne uken (foreløpig)',
+              '👑': '1. plass blant venner denne måneden (foreløpig)',
+            };
+
+            // Lag foreløpige prestasjoner
+            // VIKTIG: Foreløpige prestasjoner skal vises basert på nåværende ranking,
+            // selv om brukeren allerede har fått permanente prestasjoner fra tidligere perioder.
+            // De skal vises med "foreløpig" styling for å indikere at de kan mistes.
+            
+            console.log('[AchievementsView] Creating preliminary achievements - will show ALL regardless of permanent achievements');
+            
+            preliminaryAchievements = allPreliminaryEmojis.map((emoji, index) => {
+              const achievement = {
+                id: `preliminary_${emoji}_${Date.now()}_${index}`,
+                emoji: emoji,
+                name: emojiToName[emoji] || 'Foreløpig prestasjon',
+                description: emojiToDescription[emoji] || null,
+                category: 'competition',
+                count: 1,
+                first_earned_at: new Date().toISOString(),
+                last_earned_at: new Date().toISOString(),
+                isPreliminary: true, // Marker som foreløpig
+              };
+              console.log('[AchievementsView] Created preliminary achievement:', achievement);
+              return achievement;
+            });
+            
+            console.log('[AchievementsView] ✅ Final preliminary achievements:', preliminaryAchievements, 'Count:', preliminaryAchievements.length);
+          } catch (err) {
+            console.error('[AchievementsView] ❌ Error loading preliminary achievements:', err);
+            console.error('[AchievementsView] Error stack:', err instanceof Error ? err.stack : 'No stack');
+            // Fortsett med permanente prestasjoner selv om foreløpige feiler
+          }
+        } else {
+          console.log('[AchievementsView] ⚠️ Skipping preliminary achievements - isLoggedIn:', isLoggedIn, 'userId:', userId);
+        }
+
+        // Kombiner permanente og foreløpige prestasjoner
+        const allAchievements = [...transformed, ...preliminaryAchievements];
+        console.log('[AchievementsView] ✅ Setting achievements - total:', allAchievements.length, 'permanent:', transformed.length, 'preliminary:', preliminaryAchievements.length);
+        setAchievements(allAchievements);
       }
     } catch (err) {
-      console.error('Error in loadAchievements:', err);
+      console.error('[AchievementsView] ❌ Error in loadAchievements:', err);
+      console.error('[AchievementsView] Error stack:', err instanceof Error ? err.stack : 'No stack');
       setError('Noe gikk galt');
     } finally {
       setLoading(false);
     }
   };
 
-  const getCategoryName = (category: string) => {
-    const categoryNames: { [key: string]: string } = {
-      distance: 'Distanse',
-      goal: 'Mål',
-      competition: 'Konkurranse',
-      streak: 'Strek',
-      social: 'Sosialt',
-    };
-    return categoryNames[category] || category;
+  // Filtrer prestasjoner for visning (foreløpige har prioritet over permanente med samme emoji)
+  const getDisplayedAchievements = () => {
+    return achievements.filter(achievement => {
+      // For foreløpige prestasjoner, vis dem alltid
+      if (achievement.isPreliminary) {
+        return true;
+      }
+      // For permanente prestasjoner, vis dem kun hvis det ikke finnes en foreløpig med samme emoji
+      const hasPreliminary = achievements.some(a => 
+        a.isPreliminary && a.emoji === achievement.emoji
+      );
+      return !hasPreliminary;
+    });
   };
 
-  const groupByCategory = () => {
-    const grouped: { [key: string]: Achievement[] } = {};
-    
-    achievements.forEach(achievement => {
-      const category = achievement.category || 'other';
-      if (!grouped[category]) {
-        grouped[category] = [];
+  // Alle prestasjoner for modal (uten kategorifiltrering)
+  const getAllAchievementsForModal = () => {
+    return achievements.filter(achievement => {
+      // For foreløpige prestasjoner, vis dem alltid
+      if (achievement.isPreliminary) {
+        return true;
       }
-      grouped[category].push(achievement);
+      // For permanente prestasjoner, vis dem kun hvis det ikke finnes en foreløpig med samme emoji
+      const hasPreliminary = achievements.some(a => 
+        a.isPreliminary && a.emoji === achievement.emoji
+      );
+      return !hasPreliminary;
     });
-    
-    return grouped;
   };
 
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Prestasjoner</Text>
+        {showTitle && <Text style={styles.title}>Prestasjoner</Text>}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#1ED760" />
         </View>
@@ -132,7 +252,7 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
   if (error) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Prestasjoner</Text>
+        {showTitle && <Text style={styles.title}>Prestasjoner</Text>}
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
@@ -140,13 +260,13 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
     );
   }
 
-  const groupedAchievements = groupByCategory();
+  const displayedAchievements = getDisplayedAchievements();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Prestasjoner</Text>
+      {showTitle && <Text style={styles.title}>Prestasjoner</Text>}
       
-      {achievements.length === 0 ? (
+      {displayedAchievements.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>🎯</Text>
           <Text style={styles.emptyText}>
@@ -160,7 +280,7 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
         <>
           <View style={styles.summaryContainer}>
             <Text style={styles.summaryText}>
-              {achievements.length} {achievements.length === 1 ? 'prestasjon' : 'prestasjoner'}
+              {displayedAchievements.length} {displayedAchievements.length === 1 ? 'prestasjon' : 'prestasjoner'}
             </Text>
           </View>
 
@@ -170,51 +290,90 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
           >
-            {achievements.map((achievement) => (
-              <View key={achievement.id} style={styles.achievementCard}>
-                <Text style={styles.achievementEmoji}>{achievement.emoji}</Text>
-                <Text style={styles.achievementName} numberOfLines={2}>
-                  {achievement.name}
-                </Text>
-                {achievement.count > 1 && (
-                  <Text style={styles.achievementCount}>x{achievement.count}</Text>
-                )}
-              </View>
+            {displayedAchievements.map((achievement) => (
+              <TouchableOpacity
+                key={achievement.id}
+                onPress={() => setShowAllModal(true)}
+                activeOpacity={0.7}
+              >
+                <View 
+                  style={[
+                    styles.achievementCard,
+                    achievement.isPreliminary && styles.achievementCardPreliminary
+                  ]}
+                >
+                  <Text style={styles.achievementEmoji}>{achievement.emoji}</Text>
+                  <Text style={styles.achievementName} numberOfLines={2}>
+                    {achievement.name}
+                  </Text>
+                  {achievement.isPreliminary && (
+                    <Text style={styles.preliminaryBadge}>Foreløpig</Text>
+                  )}
+                  {!achievement.isPreliminary && achievement.count > 1 && (
+                    <Text style={styles.achievementCount}>x{achievement.count}</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
-
-          {/* Grouped by category */}
-          <View style={styles.categoriesContainer}>
-            {Object.entries(groupedAchievements).map(([category, categoryAchievements]) => (
-              <View key={category} style={styles.categorySection}>
-                <Text style={styles.categoryTitle}>
-                  {getCategoryName(category)}
-                </Text>
-                <View style={styles.categoryAchievements}>
-                  {categoryAchievements.map((achievement) => (
-                    <View key={achievement.id} style={styles.achievementItem}>
-                      <Text style={styles.achievementEmojiSmall}>{achievement.emoji}</Text>
-                      <View style={styles.achievementInfo}>
-                        <Text style={styles.achievementNameSmall}>{achievement.name}</Text>
-                        {achievement.description && (
-                          <Text style={styles.achievementDescription}>
-                            {achievement.description}
-                          </Text>
-                        )}
-                        {achievement.count > 1 && (
-                          <Text style={styles.achievementCountText}>
-                            Oppnådd {achievement.count} ganger
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </View>
         </>
       )}
+
+      {/* Modal for å vise alle prestasjoner */}
+      <Modal
+        visible={showAllModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAllModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Alle prestasjoner</Text>
+              <TouchableOpacity
+                onPress={() => setShowAllModal(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={getAllAchievementsForModal()}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View 
+                  style={[
+                    styles.modalAchievementItem,
+                    item.isPreliminary && styles.modalAchievementItemPreliminary
+                  ]}
+                >
+                  <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
+                  <View style={styles.modalAchievementInfo}>
+                    <View style={styles.modalAchievementHeader}>
+                      <Text style={styles.modalAchievementName}>{item.name}</Text>
+                      {item.isPreliminary && (
+                        <Text style={styles.modalPreliminaryBadge}>Foreløpig</Text>
+                      )}
+                    </View>
+                    {item.description && (
+                      <Text style={styles.modalAchievementDescription}>
+                        {item.description}
+                      </Text>
+                    )}
+                    {!item.isPreliminary && item.count > 1 && (
+                      <Text style={styles.modalAchievementCountText}>
+                        Oppnådd {item.count} ganger
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
+              contentContainerStyle={styles.modalListContent}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -300,6 +459,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+  achievementCardPreliminary: {
+    opacity: 0.7,
+    borderColor: '#1ED760',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
   achievementEmoji: {
     fontSize: 40,
     marginBottom: 8,
@@ -316,22 +481,56 @@ const styles = StyleSheet.create({
     color: '#1ED760',
     fontWeight: '600',
   },
-  categoriesContainer: {
-    marginTop: 10,
-  },
-  categorySection: {
-    marginBottom: 20,
-  },
-  categoryTitle: {
-    fontSize: 18,
+  preliminaryBadge: {
+    fontSize: 8,
+    color: '#1ED760',
     fontWeight: '600',
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
   },
-  categoryAchievements: {
-    gap: 10,
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  achievementItem: {
+  closeButtonText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '600',
+  },
+  modalListContent: {
+    padding: 20,
+  },
+  modalAchievementItem: {
     flexDirection: 'row',
     backgroundColor: '#fff',
     padding: 15,
@@ -339,26 +538,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     alignItems: 'center',
+    marginBottom: 12,
   },
-  achievementEmojiSmall: {
+  modalAchievementItemPreliminary: {
+    opacity: 0.7,
+    borderColor: '#1ED760',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  modalAchievementEmoji: {
     fontSize: 32,
     marginRight: 15,
   },
-  achievementInfo: {
+  modalAchievementInfo: {
     flex: 1,
   },
-  achievementNameSmall: {
+  modalAchievementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  modalAchievementName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
   },
-  achievementDescription: {
+  modalPreliminaryBadge: {
+    fontSize: 10,
+    color: '#1ED760',
+    fontWeight: '600',
+    marginLeft: 8,
+    textTransform: 'uppercase',
+  },
+  modalAchievementDescription: {
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
   },
-  achievementCountText: {
+  modalAchievementCountText: {
     fontSize: 12,
     color: '#999',
     fontStyle: 'italic',

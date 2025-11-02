@@ -8,6 +8,8 @@ import LoginScreen from './screens/LoginScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import GoalSettingsScreen from './screens/GoalSettingsScreen';
+import PasswordSettingsScreen from './screens/PasswordSettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import AddFriendScreen from './screens/AddFriendScreen';
@@ -35,6 +37,8 @@ function RootNavigator() {
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="GoalSettings" component={GoalSettingsScreen} />
+        <Stack.Screen name="PasswordSettings" component={PasswordSettingsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Friends" component={FriendsScreen} />
         <Stack.Screen name="AddFriend" component={AddFriendScreen} />

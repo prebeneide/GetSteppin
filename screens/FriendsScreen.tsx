@@ -21,6 +21,24 @@ import {
   type FriendRequest,
 } from '../services/friendService';
 import AlertModal from '../components/AlertModal';
+import OnlineIndicator from '../components/OnlineIndicator';
+
+/**
+ * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
+ */
+const isUserOnline = (lastActive: string | null | undefined): boolean => {
+  if (!lastActive) return false;
+  
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const tenMinutesInMs = 10 * 60 * 1000; // 10 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= tenMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
 
 interface FriendsScreenProps {
   navigation: any;
@@ -199,18 +217,21 @@ export default function FriendsScreen({ navigation }: FriendsScreenProps) {
             {receivedRequests.map(request => (
               <View key={request.id} style={styles.requestCard}>
                 <View style={styles.requestInfo}>
-                  {request.avatar_url ? (
-                    <Image
-                      source={{ uri: request.avatar_url }}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarPlaceholderText}>
-                        {request.username.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.avatarWrapper}>
+                    {request.avatar_url ? (
+                      <Image
+                        source={{ uri: request.avatar_url }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarPlaceholderText}>
+                          {request.username.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <OnlineIndicator isOnline={isUserOnline(request.last_active)} size="small" />
+                  </View>
                   <View style={styles.requestTextContainer}>
                     <Text style={styles.requestUsername}>{request.username}</Text>
                     {request.full_name && (
@@ -270,18 +291,21 @@ export default function FriendsScreen({ navigation }: FriendsScreenProps) {
                 }
               >
                 <View style={styles.friendInfo}>
-                  {friend.avatar_url ? (
-                    <Image
-                      source={{ uri: friend.avatar_url }}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarPlaceholderText}>
-                        {friend.username.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={styles.avatarWrapper}>
+                    {friend.avatar_url ? (
+                      <Image
+                        source={{ uri: friend.avatar_url }}
+                        style={styles.avatar}
+                      />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarPlaceholderText}>
+                          {friend.username.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <OnlineIndicator isOnline={isUserOnline(friend.last_active)} size="small" />
+                  </View>
                   <View style={styles.friendTextContainer}>
                     <View style={styles.friendNameRow}>
                       <Text style={styles.friendUsername}>{friend.username}</Text>
@@ -448,11 +472,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 12,
   },
   avatarPlaceholder: {
     width: 50,

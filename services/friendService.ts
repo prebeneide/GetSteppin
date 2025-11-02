@@ -14,6 +14,7 @@ export interface Friend {
   status: 'pending' | 'accepted' | 'blocked';
   is_requester: boolean; // true hvis du sendte forespørselen
   created_at: string;
+  last_active?: string | null; // Timestamp for when user last updated step data
 }
 
 export interface FriendRequest {
@@ -22,11 +23,13 @@ export interface FriendRequest {
   full_name: string | null;
   avatar_url: string | null;
   friendship_id: string;
-  created_at: string;
+  created_at?: string;
+  last_active?: string | null; // Timestamp for when user last updated step data
 }
 
 /**
- * Søk etter brukere etter brukernavn
+ * Søk etter brukere etter brukernavn eller e-post
+ * Returnerer alltid brukernavn for visning (ikke e-post)
  */
 export const searchUsers = async (
   query: string,
@@ -39,11 +42,12 @@ export const searchUsers = async (
 
     const searchQuery = query.trim().toLowerCase();
 
-    // Søk etter brukere med lignende brukernavn
+    // Søk etter brukere med lignende brukernavn ELLER e-post
+    // Men vi returnerer alltid brukernavn for visning
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('id, username, full_name, avatar_url')
-      .ilike('username', `%${searchQuery}%`)
+      .select('id, username, full_name, avatar_url, email')
+      .or(`username.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
       .neq('id', currentUserId) // Ekskluder deg selv
       .limit(20);
 
@@ -76,23 +80,31 @@ export const searchUsers = async (
     }
 
     // Kombiner brukerdata med friendship status
-    const usersWithFriendshipStatus = (data || []).map(user => {
-      const friendship = friendships?.find(
-        f =>
-          (f.requester_id === currentUserId && f.addressee_id === user.id) ||
-          (f.addressee_id === currentUserId && f.requester_id === user.id)
-      );
+    // FILTRER UT brukere uten brukernavn (null eller tomt) ELLER hvor brukernavn er en email
+    // VI VIL ALDRI VISE E-POST I STEDET FOR BRUKERNAVN
+    const usersWithFriendshipStatus = (data || [])
+      .filter(user => {
+        const username = user.username?.trim() || '';
+        // Filtrer ut hvis: tomt, null, eller inneholder @ (indikerer email)
+        return username !== '' && !username.includes('@');
+      })
+      .map(user => {
+        const friendship = friendships?.find(
+          f =>
+            (f.requester_id === currentUserId && f.addressee_id === user.id) ||
+            (f.addressee_id === currentUserId && f.requester_id === user.id)
+        );
 
-      return {
-        id: user.id,
-        username: user.username,
-        full_name: user.full_name,
-        avatar_url: user.avatar_url,
-        friendship_id: friendship?.id || null,
-        status: friendship?.status || null,
-        is_requester: friendship?.requester_id === currentUserId || false,
-      } as Friend;
-    });
+        return {
+          id: user.id,
+          username: user.username.trim(), // Sikre at vi bruker brukernavn (ikke email)
+          full_name: user.full_name,
+          avatar_url: user.avatar_url,
+          friendship_id: friendship?.id || null,
+          status: friendship?.status || null,
+          is_requester: friendship?.requester_id === currentUserId || false,
+        } as Friend;
+      });
 
     return { data: usersWithFriendshipStatus, error: null };
   } catch (err: any) {
@@ -248,29 +260,95 @@ export const getFriends = async (
       return { data: null, error: profileError };
     }
 
-    // Kombiner friendship og profile data
-    const friends: Friend[] = (profiles || []).map(profile => {
-      const friendship = friendships.find(
-        f =>
-          (f.requester_id === userId && f.addressee_id === profile.id) ||
-          (f.addressee_id === userId && f.requester_id === profile.id)
-      );
+    // Hent siste aktivitet (last_active) fra step_data for hver venn
+    const { data: stepData, error: stepDataError } = await supabase
+      .from('step_data')
+      .select('user_id, updated_at')
+      .in('user_id', friendIds)
+      .order('updated_at', { ascending: false });
 
-      return {
-        id: profile.id,
-        username: profile.username,
-        full_name: profile.full_name,
-        avatar_url: profile.avatar_url,
-        friendship_id: friendship?.id || '',
-        status: 'accepted',
-        is_requester: friendship?.requester_id === userId || false,
-        created_at: friendship?.created_at || '',
-      };
-    });
+    // Opprett et map for rask oppslag av siste aktivitet
+    const lastActiveMap = new Map<string, string>();
+    if (!stepDataError && stepData) {
+      stepData.forEach(entry => {
+        if (!lastActiveMap.has(entry.user_id) && entry.updated_at) {
+          lastActiveMap.set(entry.user_id, entry.updated_at);
+        }
+      });
+    }
+
+    // Kombiner friendship og profile data
+    // FILTRER UT brukere uten brukernavn (null eller tomt) ELLER hvor brukernavn er en email
+    // VI VIL ALDRI VISE E-POST I STEDET FOR BRUKERNAVN
+    const friends: Friend[] = (profiles || [])
+      .filter(profile => {
+        const username = profile.username?.trim() || '';
+        // Filtrer ut hvis: tomt, null, eller inneholder @ (indikerer email)
+        return username !== '' && !username.includes('@');
+      })
+      .map(profile => {
+        const friendship = friendships.find(
+          f =>
+            (f.requester_id === userId && f.addressee_id === profile.id) ||
+            (f.addressee_id === userId && f.requester_id === profile.id)
+        );
+
+        return {
+          id: profile.id,
+          username: profile.username.trim(), // Sikre at vi bruker brukernavn (ikke email)
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          friendship_id: friendship?.id || '',
+          status: 'accepted',
+          is_requester: friendship?.requester_id === userId || false,
+          created_at: friendship?.created_at || '',
+          last_active: lastActiveMap.get(profile.id) || null,
+        };
+      });
 
     return { data: friends, error: null };
   } catch (err: any) {
     console.error('Error in getFriends:', err);
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Hent antall venner for en bruker
+ */
+export const getFriendCount = async (
+  userId: string
+): Promise<{ data: number | null; error: any }> => {
+  try {
+    // Hent alle accepterte vennskap hvor brukeren er involvert
+    const { data: friendships, error: friendshipError } = await supabase
+      .from('friendships')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+
+    if (friendshipError) {
+      console.error('Error fetching friend count:', friendshipError);
+      return { data: null, error: friendshipError };
+    }
+
+    // Supabase returnerer count i metadata når man bruker count: 'exact'
+    // Men vi må faktisk telle rader for å få riktig antall
+    // La oss bruke en mer direkte query
+    const { count, error: countError } = await supabase
+      .from('friendships')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'accepted')
+      .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`);
+
+    if (countError) {
+      console.error('Error counting friends:', countError);
+      return { data: null, error: countError };
+    }
+
+    return { data: count || 0, error: null };
+  } catch (err: any) {
+    console.error('Error in getFriendCount:', err);
     return { data: null, error: err };
   }
 };
@@ -310,19 +388,45 @@ export const getReceivedFriendRequests = async (
       return { data: null, error: profileError };
     }
 
-    // Kombiner data
-    const requests: FriendRequest[] = (profiles || []).map(profile => {
-      const friendship = friendships.find(f => f.requester_id === profile.id);
+    // Hent siste aktivitet (last_active) fra step_data for hver forespørsel
+    const { data: stepData } = await supabase
+      .from('step_data')
+      .select('user_id, updated_at')
+      .in('user_id', requesterIds)
+      .order('updated_at', { ascending: false });
 
-      return {
-        id: profile.id,
-        username: profile.username,
-        full_name: profile.full_name,
-        avatar_url: profile.avatar_url,
-        friendship_id: friendship?.id || '',
-        created_at: friendship?.created_at || '',
-      };
-    });
+    // Opprett et map for rask oppslag av siste aktivitet
+    const lastActiveMap = new Map<string, string>();
+    if (stepData) {
+      stepData.forEach(entry => {
+        if (!lastActiveMap.has(entry.user_id) && entry.updated_at) {
+          lastActiveMap.set(entry.user_id, entry.updated_at);
+        }
+      });
+    }
+
+    // Kombiner data
+    // FILTRER UT brukere uten brukernavn (null eller tomt) ELLER hvor brukernavn er en email
+    // VI VIL ALDRI VISE E-POST I STEDET FOR BRUKERNAVN
+    const requests: FriendRequest[] = (profiles || [])
+      .filter(profile => {
+        const username = profile.username?.trim() || '';
+        // Filtrer ut hvis: tomt, null, eller inneholder @ (indikerer email)
+        return username !== '' && !username.includes('@');
+      })
+      .map(profile => {
+        const friendship = friendships.find(f => f.requester_id === profile.id);
+
+        return {
+          id: profile.id,
+          username: profile.username.trim(), // Sikre at vi bruker brukernavn (ikke email)
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          friendship_id: friendship?.id || '',
+          created_at: friendship?.created_at || '',
+          last_active: lastActiveMap.get(profile.id) || null,
+        };
+      });
 
     return { data: requests, error: null };
   } catch (err: any) {
@@ -367,18 +471,26 @@ export const getSentFriendRequests = async (
     }
 
     // Kombiner data
-    const requests: FriendRequest[] = (profiles || []).map(profile => {
-      const friendship = friendships.find(f => f.addressee_id === profile.id);
+    // FILTRER UT brukere uten brukernavn (null eller tomt) ELLER hvor brukernavn er en email
+    // VI VIL ALDRI VISE E-POST I STEDET FOR BRUKERNAVN
+    const requests: FriendRequest[] = (profiles || [])
+      .filter(profile => {
+        const username = profile.username?.trim() || '';
+        // Filtrer ut hvis: tomt, null, eller inneholder @ (indikerer email)
+        return username !== '' && !username.includes('@');
+      })
+      .map(profile => {
+        const friendship = friendships.find(f => f.addressee_id === profile.id);
 
-      return {
-        id: profile.id,
-        username: profile.username,
-        full_name: profile.full_name,
-        avatar_url: profile.avatar_url,
-        friendship_id: friendship?.id || '',
-        created_at: friendship?.created_at || '',
-      };
-    });
+        return {
+          id: profile.id,
+          username: profile.username.trim(), // Sikre at vi bruker brukernavn (ikke email)
+          full_name: profile.full_name,
+          avatar_url: profile.avatar_url,
+          friendship_id: friendship?.id || '',
+          created_at: friendship?.created_at || '',
+        };
+      });
 
     return { data: requests, error: null };
   } catch (err: any) {
@@ -422,6 +534,10 @@ export interface FriendStepData {
   steps: number;
   distance_meters: number;
   rank: number; // Position among all friends
+  last_active?: string | null; // Timestamp for when user last updated step data
+  previous_update_time?: string | null; // Timestamp for previous update (for speed calculation)
+  previous_steps?: number; // Steps count at previous update
+  previous_distance?: number; // Distance at previous update
 }
 
 /**
@@ -446,11 +562,13 @@ export const getFriendsStepsForPeriod = async (
     const friendIds = friends?.map(f => f.id) || [];
     
     // Hent skritt-data for alle venner i perioden
+    // Henter også created_at for å kunne beregne hastighet basert på tid
     let stepDataQuery = supabase
       .from('step_data')
-      .select('user_id, steps, distance_meters')
+      .select('user_id, steps, distance_meters, updated_at, date, created_at')
       .gte('date', startDate)
-      .lte('date', endDate);
+      .lte('date', endDate)
+      .order('updated_at', { ascending: false });
 
     if (friendIds.length > 0) {
       stepDataQuery = stepDataQuery.in('user_id', friendIds);
@@ -469,30 +587,61 @@ export const getFriendsStepsForPeriod = async (
     // Hent brukerens egen skritt-data for perioden hvis inkludert
     let currentUserSteps = 0;
     let currentUserDistance = 0;
+    let userStepDataList: Array<{ steps: number; distance_meters: number; updated_at: string | null; date: string; created_at: string | null }> | null = null;
     
     if (includeCurrentUser) {
-      const { data: userStepDataList, error: userStepError } = await supabase
+      const { data: userData, error: userStepError } = await supabase
         .from('step_data')
-        .select('steps, distance_meters')
+        .select('steps, distance_meters, updated_at, date, created_at')
         .gte('date', startDate)
         .lte('date', endDate)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false });
 
-      if (!userStepError && userStepDataList) {
+      if (!userStepError && userData) {
+        userStepDataList = userData;
         // Summer alle skritt og distanse i perioden
-        currentUserSteps = userStepDataList.reduce((sum, entry) => sum + (entry.steps || 0), 0);
-        currentUserDistance = userStepDataList.reduce((sum, entry) => sum + (entry.distance_meters || 0), 0);
+        currentUserSteps = userStepDataList.reduce((sum: number, entry: any) => sum + (entry.steps || 0), 0);
+        currentUserDistance = userStepDataList.reduce((sum: number, entry: any) => sum + (entry.distance_meters || 0), 0);
       }
     }
 
     // Kombiner venn-data med skritt-data
     const friendsWithSteps: FriendStepData[] = [];
     
+    // Hent dagens data for aktivitetstype-beregning
+    const today = new Date().toISOString().split('T')[0];
+    
     // Legg til venner med skritt-data (summer alle dager i perioden)
     friends?.forEach(friend => {
       const friendStepDataList = friendsStepData?.filter(sd => sd.user_id === friend.id) || [];
       const totalSteps = friendStepDataList.reduce((sum, entry) => sum + (entry.steps || 0), 0);
       const totalDistance = friendStepDataList.reduce((sum, entry) => sum + (entry.distance_meters || 0), 0);
+      
+      // Finn dagens data for aktivitetstype-beregning
+      const todayData = friendStepDataList.find(sd => {
+        // Sjekk om datoen er i dag
+        const entryDate = sd.date || '';
+        return entryDate === today;
+      });
+      
+      // Finn siste oppdatering (siste updated_at)
+      const lastActive = friendStepDataList.length > 0
+        ? friendStepDataList
+            .map(e => e.updated_at ? new Date(e.updated_at).getTime() : 0)
+            .reduce((latest, time) => Math.max(latest, time), 0)
+        : null;
+      
+      // For hastighetsberegning: finn siste to oppdateringer for dagens data
+      const todayDataList = friendStepDataList
+        .filter(sd => sd.date === today)
+        .sort((a, b) => {
+          const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return timeB - timeA; // Nyest først
+        });
+      
+      const previousUpdate = todayDataList[1]; // Forrige oppdatering
       
       friendsWithSteps.push({
         id: friend.id,
@@ -502,6 +651,10 @@ export const getFriendsStepsForPeriod = async (
         steps: totalSteps,
         distance_meters: totalDistance,
         rank: 0, // Vil bli satt etter sortering
+        last_active: lastActive ? new Date(lastActive).toISOString() : null,
+        previous_update_time: previousUpdate?.updated_at || previousUpdate?.created_at || null,
+        previous_steps: previousUpdate?.steps || 0,
+        previous_distance: previousUpdate?.distance_meters || 0,
       });
     });
 
@@ -513,15 +666,41 @@ export const getFriendsStepsForPeriod = async (
         .eq('id', userId)
         .single();
 
-      if (userProfile) {
+      // VI VIL ALDRI VISE E-POST I STEDET FOR BRUKERNAVN
+      // Sjekk at brukernavn eksisterer, ikke er tomt, og ikke er en email
+      const username = userProfile?.username?.trim() || '';
+      if (userProfile && username !== '' && !username.includes('@')) {
+        // Finn siste oppdatering for brukeren selv
+        const lastActive = userStepDataList && userStepDataList.length > 0
+          ? userStepDataList
+              .map((e: any) => e.updated_at ? new Date(e.updated_at).getTime() : 0)
+              .reduce((latest: number, time: number) => Math.max(latest, time), 0)
+          : null;
+        
+        // For hastighetsberegning: finn siste to oppdateringer for dagens data
+        const today = new Date().toISOString().split('T')[0];
+        const todayUserDataList = (userStepDataList || [])
+          .filter((sd: any) => sd.date === today)
+          .sort((a: any, b: any) => {
+            const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+            const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+            return timeB - timeA; // Nyest først
+          });
+        
+        const previousUserUpdate = todayUserDataList[1];
+        
         friendsWithSteps.push({
           id: userId,
-          username: userProfile.username,
+          username: userProfile.username.trim(), // Sikre at vi bruker brukernavn (ikke email)
           full_name: userProfile.full_name,
           avatar_url: userProfile.avatar_url,
           steps: currentUserSteps,
           distance_meters: currentUserDistance,
           rank: 0, // Vil bli satt etter sortering
+          last_active: lastActive ? new Date(lastActive).toISOString() : null,
+          previous_update_time: previousUserUpdate?.updated_at || previousUserUpdate?.created_at || null,
+          previous_steps: previousUserUpdate?.steps || 0,
+          previous_distance: previousUserUpdate?.distance_meters || 0,
         });
       }
     }

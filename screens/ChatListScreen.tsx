@@ -15,6 +15,24 @@ import {
   getConversations,
   type ChatConversation,
 } from '../services/chatService';
+import OnlineIndicator from '../components/OnlineIndicator';
+
+/**
+ * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
+ */
+const isUserOnline = (lastActive: string | null | undefined): boolean => {
+  if (!lastActive) return false;
+  
+  try {
+    const lastActiveTime = new Date(lastActive).getTime();
+    const now = new Date().getTime();
+    const tenMinutesInMs = 10 * 60 * 1000; // 10 minutter i millisekunder
+    
+    return (now - lastActiveTime) <= tenMinutesInMs;
+  } catch (err) {
+    return false;
+  }
+};
 
 interface ChatListScreenProps {
   navigation: any;
@@ -147,18 +165,21 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
               }
             >
               <View style={styles.conversationInfo}>
-                {conversation.avatar_url ? (
-                  <Image
-                    source={{ uri: conversation.avatar_url }}
-                    style={styles.avatar}
-                  />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <Text style={styles.avatarPlaceholderText}>
-                      {conversation.username.charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.avatarWrapper}>
+                  {conversation.avatar_url ? (
+                    <Image
+                      source={{ uri: conversation.avatar_url }}
+                      style={styles.avatar}
+                    />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarPlaceholderText}>
+                        {conversation.username.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <OnlineIndicator isOnline={isUserOnline(conversation.last_active)} size="small" />
+                </View>
                 <View style={styles.conversationTextContainer}>
                   <View style={styles.conversationHeader}>
                     <Text style={styles.conversationUsername}>
@@ -268,11 +289,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
   avatar: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    marginRight: 12,
   },
   avatarPlaceholder: {
     width: 50,
