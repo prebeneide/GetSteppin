@@ -347,7 +347,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size="large" color="#1ED760" />
         </View>
       </View>
     );
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#4CAF50',
+    color: '#1ED760',
     fontWeight: '600',
   },
   loadingContainer: {
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 15,
     borderWidth: 3,
-    borderColor: '#4CAF50',
+    borderColor: '#1ED760',
   },
   avatar: {
     width: '100%',
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
   },
   changePhotoButtonText: {
     color: '#fff',
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   loginButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',

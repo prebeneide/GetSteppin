@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#1ED760',
     borderRadius: 12,
     padding: 15,
     fontSize: 24,
@@ -379,8 +379,8 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   suggestionButtonActive: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#1ED760',
+    borderColor: '#1ED760',
   },
   suggestionButtonText: {
     fontSize: 14,
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',

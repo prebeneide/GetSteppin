@@ -213,7 +213,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
               {loading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color="#4CAF50" />
+                  <ActivityIndicator size="small" color="#1ED760" />
                   <Text style={styles.loadingText}>Laster...</Text>
                 </View>
               ) : (
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#4CAF50',
+    color: '#1ED760',
     fontWeight: '600',
   },
   scrollContent: {
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 2,
-    borderColor: '#4CAF50',
+    borderColor: '#1ED760',
     borderRadius: 12,
     padding: 15,
     fontSize: 20,
@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
   },
   suggestionButtonActive: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#1ED760',
+    borderColor: '#1ED760',
   },
   suggestionButtonText: {
     fontSize: 14,
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   saveButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',

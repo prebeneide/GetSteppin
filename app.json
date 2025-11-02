@@ -10,10 +10,12 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1ED760"
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.yourname.steppin",
+      "buildNumber": "1",
       "infoPlist": {
         "NSMotionUsageDescription": "Denne appen trenger tilgang til bevegelsesdata for å telle skritt.",
         "NSPhotoLibraryUsageDescription": "Appen trenger tilgang til bilder for å laste opp profilbilde.",
@@ -21,9 +23,11 @@
       }
     },
     "android": {
+      "package": "com.yourname.steppin",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1ED760"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

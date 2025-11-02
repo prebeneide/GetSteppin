@@ -9,6 +9,11 @@ import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import FriendsScreen from './screens/FriendsScreen';
+import AddFriendScreen from './screens/AddFriendScreen';
+import FriendProfileScreen from './screens/FriendProfileScreen';
+import ChatScreen from './screens/ChatScreen';
+import ChatListScreen from './screens/ChatListScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,7 +23,7 @@ function RootNavigator() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4CAF50" />
+        <ActivityIndicator size="large" color="#1ED760" />
       </View>
     );
   }
@@ -31,6 +36,11 @@ function RootNavigator() {
         <Stack.Screen name="SignUp" component={SignUpScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Friends" component={FriendsScreen} />
+        <Stack.Screen name="AddFriend" component={AddFriendScreen} />
+        <Stack.Screen name="FriendProfile" component={FriendProfileScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="ChatList" component={ChatListScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

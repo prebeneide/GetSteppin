@@ -57,6 +57,7 @@ export const migrateAnonymousDataToUser = async (userId: string): Promise<{ succ
 
 /**
  * Migrer profilinnstillinger (avatar_url, daily_step_goal) fra device_settings til user_profiles
+ * Kopierer også bildet fra anonymous/ mappen til userId/ mappen i Storage
  */
 async function migrateProfileSettings(deviceId: string, userId: string): Promise<void> {
   try {
@@ -92,9 +93,177 @@ async function migrateProfileSettings(deviceId: string, userId: string): Promise
     // Bygg oppdateringsobjekt - bare overfør hvis brukeren ikke allerede har det
     const updates: { avatar_url?: string; daily_step_goal?: number | null } = {};
 
-    // Overfør avatar_url hvis device har det og bruker ikke har det
-    if (deviceSettings.avatar_url && !userProfile?.avatar_url) {
-      updates.avatar_url = deviceSettings.avatar_url;
+    // Håndter avatar_url - kopier filen fra anonymous/ til userId/ hvis nødvendig
+    // Hvis device har nyere bilde enn bruker, kopier det
+    const shouldMigrateAvatar = () => {
+      if (!deviceSettings.avatar_url) return false;
+      
+      // Hvis bruker ikke har bilde, alltid migrer
+      if (!userProfile?.avatar_url) return true;
+      
+      // Hvis device har bilde i anonymous/ og bruker har bilde, sjekk timestamp
+      if (deviceSettings.avatar_url.includes('/anonymous/')) {
+        // Hent timestamp fra filnavnet (format: deviceId_timestamp.ext)
+        const deviceFileName = deviceSettings.avatar_url.split('/').pop()?.split('?')[0] || '';
+        const deviceTimestamp = parseInt(deviceFileName.split('_')[1]?.split('.')[0] || '0');
+        
+        // Hent timestamp fra brukerens filnavn (format: userId_timestamp.ext)
+        const userFileName = userProfile.avatar_url.split('/').pop()?.split('?')[0] || '';
+        const userTimestamp = parseInt(userFileName.split('_')[1]?.split('.')[0] || '0');
+        
+        // Hvis device-bildet er nyere (høyere timestamp), migrer det
+        if (deviceTimestamp > userTimestamp) {
+          console.log(`Device avatar is newer (${deviceTimestamp} > ${userTimestamp}), migrating...`);
+          return true;
+        }
+      }
+      
+      return false;
+    };
+
+    if (shouldMigrateAvatar()) {
+      // Sjekk om bildet ligger i anonymous/ mappen
+      if (deviceSettings.avatar_url.includes('/anonymous/')) {
+        try {
+          // Hent filnavnet fra URL-en
+          const urlParts = deviceSettings.avatar_url.split('/');
+          const sourceFileName = urlParts[urlParts.length - 1].split('?')[0]; // Fjern cache-busting query param
+          const sourcePath = `anonymous/${sourceFileName}`;
+          
+          // Bruk ny timestamp for target fil for å unngå konflikter og sikre at det er det nyeste bildet
+          const fileExt = sourceFileName.split('.').pop() || 'jpg';
+          const newTimestamp = Date.now();
+          const targetFileName = `${userId}_${newTimestamp}.${fileExt}`;
+          const targetPath = `${userId}/${targetFileName}`;
+
+          // Alltid kopier bildet fra anonymous/ til userId/ (ikke sjekk etter eksisterende filer)
+          // Dette sikrer at det nyeste bildet fra anonym bruker blir brukt
+          const { data: imageData, error: downloadError } = await supabase.storage
+            .from('avatars')
+            .download(sourcePath);
+
+          if (!downloadError && imageData) {
+            // Konverter blob til ArrayBuffer for React Native
+            const arrayBuffer = await imageData.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            // Last opp til userId/ mappen (overskriver eventuelt eksisterende med samme navn)
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('avatars')
+              .upload(targetPath, uint8Array, {
+                contentType: 'image/jpeg', // Default, kan hentes fra metadata
+                upsert: true,
+              });
+
+            if (!uploadError && uploadData) {
+              // Få ny public URL
+              const { data: urlData } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(targetPath);
+
+              updates.avatar_url = urlData.publicUrl;
+              console.log('Copied avatar from anonymous/ to userId/');
+              
+              // Oppdater også device_settings til å peke på samme fil for konsistens
+              await supabase
+                .from('device_settings')
+                .update({ avatar_url: urlData.publicUrl })
+                .eq('device_id', deviceId);
+            } else {
+              // Hvis opplasting feiler, bruk original URL
+              updates.avatar_url = deviceSettings.avatar_url;
+            }
+          } else {
+            // Hvis nedlasting feiler, bruk original URL
+            updates.avatar_url = deviceSettings.avatar_url;
+          }
+        } catch (avatarError) {
+          console.warn('Error copying avatar file (using original URL):', avatarError);
+          // Fallback: bruk original URL
+          updates.avatar_url = deviceSettings.avatar_url;
+        }
+      } else {
+        // URL peker ikke til anonymous/, så bruk den direkte
+        updates.avatar_url = deviceSettings.avatar_url;
+      }
+    } else if (deviceSettings.avatar_url && userProfile?.avatar_url) {
+      // Begge har avatar_url - sjekk hvilket som er nyest basert på timestamp
+      let deviceTimestamp = 0;
+      let userTimestamp = 0;
+      
+      // Hent timestamp fra device bilde hvis det er i anonymous/
+      if (deviceSettings.avatar_url.includes('/anonymous/')) {
+        const deviceFileName = deviceSettings.avatar_url.split('/').pop()?.split('?')[0] || '';
+        deviceTimestamp = parseInt(deviceFileName.split('_')[1]?.split('.')[0] || '0');
+      }
+      
+      // Hent timestamp fra user bilde hvis det er i userId/
+      if (userProfile.avatar_url.includes(`/${userId}/`)) {
+        const userFileName = userProfile.avatar_url.split('/').pop()?.split('?')[0] || '';
+        userTimestamp = parseInt(userFileName.split('_')[1]?.split('.')[0] || '0');
+      }
+      
+      // Hvis device-bildet er nyere, kopier det til userId/ og oppdater begge
+      if (deviceTimestamp > userTimestamp && deviceSettings.avatar_url.includes('/anonymous/')) {
+        try {
+          const urlParts = deviceSettings.avatar_url.split('/');
+          const sourceFileName = urlParts[urlParts.length - 1].split('?')[0];
+          const sourcePath = `anonymous/${sourceFileName}`;
+          
+          // Bruk ny timestamp for target fil for å unngå konflikter
+          const fileExt = sourceFileName.split('.').pop() || 'jpg';
+          const newTimestamp = Date.now();
+          const targetFileName = `${userId}_${newTimestamp}.${fileExt}`;
+          const targetPath = `${userId}/${targetFileName}`;
+
+          const { data: imageData, error: downloadError } = await supabase.storage
+            .from('avatars')
+            .download(sourcePath);
+
+          if (!downloadError && imageData) {
+            const arrayBuffer = await imageData.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('avatars')
+              .upload(targetPath, uint8Array, {
+                contentType: 'image/jpeg',
+                upsert: true,
+              });
+
+            if (!uploadError && uploadData) {
+              const { data: urlData } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(targetPath);
+
+              // Oppdater begge til å peke på ny fil
+              await supabase
+                .from('user_profiles')
+                .update({ avatar_url: urlData.publicUrl })
+                .eq('id', userId);
+
+              await supabase
+                .from('device_settings')
+                .update({ avatar_url: urlData.publicUrl })
+                .eq('device_id', deviceId);
+              
+              console.log(`Migrated newer avatar from anonymous/ (${deviceTimestamp} > ${userTimestamp})`);
+            }
+          }
+        } catch (copyError) {
+          console.warn('Error copying newer avatar:', copyError);
+        }
+      } else if (userTimestamp >= deviceTimestamp || userProfile.avatar_url.includes(`/${userId}/`)) {
+        // Bruker-bildet er nyere eller lik, synkroniser device_settings til å peke på samme fil
+        await supabase
+          .from('device_settings')
+          .update({ avatar_url: userProfile.avatar_url })
+          .eq('device_id', deviceId);
+        console.log('Synced device_settings to use user_profiles avatar');
+      } else if (userProfile.avatar_url === deviceSettings.avatar_url) {
+        // De peker allerede på samme fil - perfekt!
+        console.log('Avatars already in sync');
+      }
     }
 
     // Overfør daily_step_goal hvis device har det og bruker ikke har det

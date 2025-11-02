@@ -123,7 +123,7 @@ export default function AchievementsView({ userId, isLoggedIn }: AchievementsVie
       <View style={styles.container}>
         <Text style={styles.title}>Prestasjoner</Text>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size="large" color="#1ED760" />
         </View>
       </View>
     );
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   },
   achievementCount: {
     fontSize: 10,
-    color: '#4CAF50',
+    color: '#1ED760',
     fontWeight: '600',
   },
   categoriesContainer: {

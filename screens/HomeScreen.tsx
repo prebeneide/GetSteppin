@@ -340,7 +340,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 progress={progressPercent}
                 size={220}
                 strokeWidth={16}
-                color="#4CAF50"
+                color="#1ED760"
                 backgroundColor="#e0e0e0"
               >
                 <View style={styles.circularProgressContent}>
@@ -391,7 +391,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
           {saving && (
             <View style={styles.savingContainer}>
-              <ActivityIndicator size="small" color="#4CAF50" />
+              <ActivityIndicator size="small" color="#1ED760" />
               <Text style={styles.savingText}>Lagrer...</Text>
             </View>
           )}
@@ -414,30 +414,50 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
       </View>
 
-      {/* Login prompt for friends feature - Always at bottom */}
-      {!user && (
-        <View style={styles.loginPrompt}>
-          <Text style={styles.loginPromptText}>
-            📱 Logg inn for å legge til venner og sammenligne skritt!
-          </Text>
-          <View style={styles.loginButtons}>
-            <TouchableOpacity
-              style={[styles.loginButton, styles.loginButtonPrimary]}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.loginButtonText}>Logg inn</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.loginButton, styles.loginButtonSecondary]}
-              onPress={() => navigation.navigate('SignUp')}
-            >
-              <Text style={[styles.loginButtonText, styles.loginButtonTextSecondary]}>
-                Opprett konto
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+              {/* Friends Section - Only show if logged in */}
+              {user && (
+                <View style={styles.friendsSection}>
+                  <TouchableOpacity
+                    style={styles.friendsButton}
+                    onPress={() => navigation.navigate('Friends')}
+                  >
+                    <Text style={styles.friendsButtonText}>👥 Mine venner</Text>
+                    <Text style={styles.friendsButtonArrow}>→</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.chatListButton}
+                    onPress={() => navigation.navigate('ChatList')}
+                  >
+                    <Text style={styles.chatListButtonText}>💬 Meldinger</Text>
+                    <Text style={styles.friendsButtonArrow}>→</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Login prompt for friends feature - Always at bottom */}
+              {!user && (
+                <View style={styles.loginPrompt}>
+                  <Text style={styles.loginPromptText}>
+                    📱 Logg inn for å legge til venner og sammenligne skritt!
+                  </Text>
+                  <View style={styles.loginButtons}>
+                    <TouchableOpacity
+                      style={[styles.loginButton, styles.loginButtonPrimary]}
+                      onPress={() => navigation.navigate('Login')}
+                    >
+                      <Text style={styles.loginButtonText}>Logg inn</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.loginButton, styles.loginButtonSecondary]}
+                      onPress={() => navigation.navigate('SignUp')}
+                    >
+                      <Text style={[styles.loginButtonText, styles.loginButtonTextSecondary]}>
+                        Opprett konto
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
 
     </ScrollView>
   );
@@ -485,7 +505,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -553,8 +573,11 @@ const styles = StyleSheet.create({
   circularProgressPercent: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#1ED760',
     marginBottom: 4,
+    textShadowColor: 'rgba(30, 215, 96, 0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
   circularProgressLabel: {
     fontSize: 14,
@@ -590,7 +613,7 @@ const styles = StyleSheet.create({
   stepCount: {
     fontSize: 72,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#1ED760',
     marginBottom: 5,
   },
   stepLabel: {
@@ -629,7 +652,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     borderRadius: 10,
   },
   progressText: {
@@ -652,7 +675,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   setGoalButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -711,12 +734,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginButtonPrimary: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
   },
   loginButtonSecondary: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#4CAF50',
+    borderColor: '#1ED760',
   },
   loginButtonText: {
     color: '#fff',
@@ -724,7 +747,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   loginButtonTextSecondary: {
-    color: '#4CAF50',
+    color: '#1ED760',
   },
   achievementsWrapper: {
     width: '100%',
@@ -732,6 +755,43 @@ const styles = StyleSheet.create({
   statisticsWrapper: {
     width: '100%',
   },
+  friendsSection: {
+    width: '100%',
+    marginTop: 20,
+  },
+  friendsButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1ED760',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  friendsButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+          friendsButtonArrow: {
+            fontSize: 20,
+            color: '#fff',
+            fontWeight: 'bold',
+          },
+          chatListButton: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            backgroundColor: '#1ED760',
+            padding: 16,
+            borderRadius: 12,
+            marginBottom: 20,
+          },
+          chatListButtonText: {
+            fontSize: 18,
+            fontWeight: '600',
+            color: '#fff',
+          },
   noStatisticsContainer: {
     marginTop: 20,
     padding: 20,

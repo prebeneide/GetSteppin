@@ -397,7 +397,7 @@ export default function StatisticsView({ userId, isLoggedIn }: StatisticsViewPro
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
+          <ActivityIndicator size="large" color="#1ED760" />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -555,8 +555,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   periodButtonActive: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#1ED760',
+    borderColor: '#1ED760',
   },
   periodButtonText: {
     fontSize: 14,
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#1ED760',
     marginBottom: 2,
   },
   summaryUnit: {
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 30,
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#1ED760',
     borderRadius: 4,
     minHeight: 2,
   },
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
   listItemSteps: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#1ED760',
   },
 });
 

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { migrateAnonymousDataToUser } from '../services/migrationService';
+import { getDeviceId } from '../lib/deviceId';
 
 interface AuthContextType {
   session: Session | null;
@@ -168,6 +169,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    // Før logg ut: sørg for at device_settings har samme avatar_url som user_profiles
+    // Dette sikrer at samme bilde vises uavhengig av innloggingsstatus
+    const currentUser = user;
+    if (currentUser) {
+      try {
+        // Hent brukerens avatar_url
+        const { data: userProfile } = await supabase
+          .from('user_profiles')
+          .select('avatar_url')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (userProfile?.avatar_url) {
+          // Oppdater device_settings til å peke på samme bilde
+          const deviceId = await getDeviceId();
+          
+          // Sjekk om device_settings eksisterer
+          const { data: existing } = await supabase
+            .from('device_settings')
+            .select('id')
+            .eq('device_id', deviceId)
+            .single();
+
+          if (existing) {
+            // Oppdater eksisterende
+            await supabase
+              .from('device_settings')
+              .update({ avatar_url: userProfile.avatar_url })
+              .eq('device_id', deviceId);
+          } else {
+            // Opprett ny entry
+            await supabase
+              .from('device_settings')
+              .insert({
+                device_id: deviceId,
+                avatar_url: userProfile.avatar_url,
+              });
+          }
+        }
+      } catch (err) {
+        console.warn('Error syncing avatar on sign out:', err);
+        // Fortsett med logg ut selv om dette feiler
+      }
+    }
+
     await supabase.auth.signOut();
   };
 

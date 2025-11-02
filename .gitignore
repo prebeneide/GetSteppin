@@ -40,3 +40,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Documentation files (private - don't commit to GitHub)
+STORE_PUBLICATION_GUIDE.md
+SUPABASE_SETUP.md
