@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
+import { useWalkTracker } from '../hooks/useWalkTracker';
 import { saveStepData } from '../services/stepService';
 import { checkAllAchievements } from '../services/achievementService';
 import { supabase } from '../lib/supabase';
@@ -21,6 +22,7 @@ interface HomeScreenProps {
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, signOut } = useAuth();
   const { stepData, error: stepError } = useStepCounter();
+  const walkTracker = useWalkTracker(); // Initialize walk tracking
   const [saving, setSaving] = useState(false);
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
   const [goalLoaded, setGoalLoaded] = useState(false);
@@ -425,25 +427,6 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 </View>
               )}
 
-              {/* Friends Section - Only show if logged in */}
-              {user && (
-                <View style={styles.friendsSection}>
-                  <TouchableOpacity
-                    style={styles.friendsButton}
-                    onPress={() => navigation.navigate('Friends')}
-                  >
-                    <Text style={styles.friendsButtonText}>👥 Mine venner</Text>
-                    <Text style={styles.friendsButtonArrow}>→</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.chatListButton}
-                    onPress={() => navigation.navigate('ChatList')}
-                  >
-                    <Text style={styles.chatListButtonText}>💬 Meldinger</Text>
-                    <Text style={styles.friendsButtonArrow}>→</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
 
               {/* Login prompt for friends feature - Always at bottom */}
               {!user && (

@@ -113,35 +113,29 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
           try {
             console.log('[AchievementsView] ✅ Fetching preliminary achievements for userId:', userId);
             
-            // Hent foreløpige prestasjoner for dag, uke og måned
+            // Hent kun daglige foreløpige prestasjoner (for å unngå duplikater)
+            // Brukere kan ha samme rank for day/week/month, som vil gi samme emoji flere ganger
             const dailyPreliminary = await getPreliminaryAchievements(userId, 'day');
-            const weeklyPreliminary = await getPreliminaryAchievements(userId, 'week');
-            const monthlyPreliminary = await getPreliminaryAchievements(userId, 'month');
 
             console.log('[AchievementsView] ✅ Preliminary achievements received:', {
               daily: dailyPreliminary,
-              weekly: weeklyPreliminary,
-              monthly: monthlyPreliminary,
             });
 
-            // Kombiner alle foreløpige prestasjoner
-            console.log('[AchievementsView] Daily preliminary (raw):', dailyPreliminary, 'Type:', typeof dailyPreliminary, 'Is Array:', Array.isArray(dailyPreliminary));
-            console.log('[AchievementsView] Weekly preliminary (raw):', weeklyPreliminary, 'Type:', typeof weeklyPreliminary, 'Is Array:', Array.isArray(weeklyPreliminary));
-            console.log('[AchievementsView] Monthly preliminary (raw):', monthlyPreliminary, 'Type:', typeof monthlyPreliminary, 'Is Array:', Array.isArray(monthlyPreliminary));
-            
-            const allPreliminaryEmojis = [
-              ...(Array.isArray(dailyPreliminary) ? dailyPreliminary : []),
-              ...(Array.isArray(weeklyPreliminary) ? weeklyPreliminary : []),
-              ...(Array.isArray(monthlyPreliminary) ? monthlyPreliminary : []),
-            ].filter((emoji): emoji is string => {
-              const isValid = typeof emoji === 'string' && emoji.trim() !== '' && emoji.length > 0;
-              if (!isValid) {
-                console.log('[AchievementsView] Filtered out invalid emoji:', emoji, 'Type:', typeof emoji);
-              }
-              return isValid;
-            }); // Filtrer ut tomme strenger og ugyldige verdier
+            // Bruk kun daglige foreløpige prestasjoner og dedupliser
+            const allPreliminaryEmojis = Array.isArray(dailyPreliminary) 
+              ? dailyPreliminary
+                  .filter((emoji): emoji is string => {
+                    const isValid = typeof emoji === 'string' && emoji.trim() !== '' && emoji.length > 0;
+                    if (!isValid) {
+                      console.log('[AchievementsView] Filtered out invalid emoji:', emoji, 'Type:', typeof emoji);
+                    }
+                    return isValid;
+                  })
+                  // Dedupliser: bare beholde første forekomst av hver emoji
+                  .filter((emoji, index, array) => array.indexOf(emoji) === index)
+              : []; // Filtrer ut tomme strenger og ugyldige verdier
 
-            console.log('[AchievementsView] ✅ All preliminary emojis (filtered):', allPreliminaryEmojis, 'Count:', allPreliminaryEmojis.length);
+            console.log('[AchievementsView] ✅ All preliminary emojis (filtered and deduplicated):', allPreliminaryEmojis, 'Count:', allPreliminaryEmojis.length);
 
             // Hent achievement types for foreløpige prestasjoner
             const emojiToName: { [key: string]: string } = {
