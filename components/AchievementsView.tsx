@@ -91,17 +91,48 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
         setError('Kunne ikke laste prestasjoner');
       } else {
         // Transform the data to flatten achievement_types
-        const transformed = (data || []).map((item: any) => ({
-          id: item.id,
-          emoji: item.achievement_types?.emoji || '',
-          name: item.achievement_types?.name || '',
-          description: item.achievement_types?.description || null,
-          category: item.achievement_types?.category || '',
-          count: item.count || 1,
-          first_earned_at: item.first_earned_at,
-          last_earned_at: item.last_earned_at,
-          isPreliminary: false, // Permanente prestasjoner
-        }));
+        const transformed = (data || []).map((item: any) => {
+          const emoji: string = item.achievement_types?.emoji || '';
+          const lastEarnedAt = item.last_earned_at as string;
+          const earnedDate = lastEarnedAt ? new Date(lastEarnedAt) : null;
+
+          // Gi mer presise navn/beskrivelser for permanente konkurranse-prestasjoner,
+          // slik at de ikke ser ut som om de gjelder "i dag".
+          const emojiNameMap: { [k: string]: string } = {
+            '🥇': 'Dagens gull (daglig)',
+            '🥈': 'Dagens sølv (daglig)',
+            '🥉': 'Dagens bronse (daglig)',
+            '🏆': 'Ukesvinner',
+            '👑': 'Månedens vinner',
+          };
+
+          const emojiDescMap: { [k: string]: string } = {
+            '🥇': '1. plass blant venner i går',
+            '🥈': '2. plass blant venner i går',
+            '🥉': '3. plass blant venner i går',
+            '🏆': '1. plass blant venner forrige uke',
+            '👑': '1. plass blant venner forrige måned',
+          };
+
+          const name = emojiNameMap[emoji] || item.achievement_types?.name || '';
+          // Hvis vi har dato, vis siste oppnådd for tydelighet
+          const baseDesc = emojiDescMap[emoji] || item.achievement_types?.description || null;
+          const description = earnedDate
+            ? `${baseDesc || ''}${baseDesc ? ' • ' : ''}Sist oppnådd: ${earnedDate.toLocaleDateString('no-NO')}`
+            : baseDesc;
+
+          return {
+            id: item.id,
+            emoji,
+            name,
+            description,
+            category: item.achievement_types?.category || '',
+            count: item.count || 1,
+            first_earned_at: item.first_earned_at,
+            last_earned_at: item.last_earned_at,
+            isPreliminary: false, // Permanente prestasjoner
+          } as Achievement;
+        });
 
         console.log('[AchievementsView] Loaded permanent achievements:', transformed.length);
 
@@ -331,40 +362,65 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
-
-            <FlatList
-              data={getAllAchievementsForModal()}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View 
-                  style={[
-                    styles.modalAchievementItem,
-                    item.isPreliminary && styles.modalAchievementItemPreliminary
-                  ]}
-                >
-                  <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
-                  <View style={styles.modalAchievementInfo}>
-                    <View style={styles.modalAchievementHeader}>
-                      <Text style={styles.modalAchievementName}>{item.name}</Text>
-                      {item.isPreliminary && (
-                        <Text style={styles.modalPreliminaryBadge}>Foreløpig</Text>
-                      )}
+            {/* Delt opp i I DAG (foreløpige) og TIDLIGERE (permanente) */}
+            <ScrollView contentContainerStyle={styles.modalListContent}>
+              {/* I dag */}
+              <Text style={styles.sectionHeader}>I dag</Text>
+              {achievements.filter(a => a.isPreliminary).length === 0 ? (
+                <Text style={styles.sectionEmpty}>Ingen foreløpige prestasjoner ennå</Text>
+              ) : (
+                achievements
+                  .filter(a => a.isPreliminary)
+                  .map(item => (
+                    <View
+                      key={item.id}
+                      style={[
+                        styles.modalAchievementItem,
+                        item.isPreliminary && styles.modalAchievementItemPreliminary,
+                      ]}
+                    >
+                      <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
+                      <View style={styles.modalAchievementInfo}>
+                        <View style={styles.modalAchievementHeader}>
+                          <Text style={styles.modalAchievementName}>{item.name}</Text>
+                          <Text style={styles.modalPreliminaryBadge}>Foreløpig</Text>
+                        </View>
+                        {item.description && (
+                          <Text style={styles.modalAchievementDescription}>{item.description}</Text>
+                        )}
+                      </View>
                     </View>
-                    {item.description && (
-                      <Text style={styles.modalAchievementDescription}>
-                        {item.description}
-                      </Text>
-                    )}
-                    {!item.isPreliminary && item.count > 1 && (
-                      <Text style={styles.modalAchievementCountText}>
-                        Oppnådd {item.count} ganger
-                      </Text>
-                    )}
-                  </View>
-                </View>
+                  ))
               )}
-              contentContainerStyle={styles.modalListContent}
-            />
+
+              {/* Tidligere */}
+              <Text style={[styles.sectionHeader, { marginTop: 16 }]}>Tidligere</Text>
+              {achievements.filter(a => !a.isPreliminary).length === 0 ? (
+                <Text style={styles.sectionEmpty}>Ingen prestasjoner enda</Text>
+              ) : (
+                achievements
+                  .filter(a => !a.isPreliminary)
+                  .map(item => (
+                    <View
+                      key={item.id}
+                      style={styles.modalAchievementItem}
+                    >
+                      <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
+                      <View style={styles.modalAchievementInfo}>
+                        <View style={styles.modalAchievementHeader}>
+                          <Text style={styles.modalAchievementName}>{item.name}</Text>
+                        </View>
+                        {item.description && (
+                          <Text style={styles.modalAchievementDescription}>{item.description}</Text>
+                        )}
+                        {item.count > 1 && (
+                          <Text style={styles.modalAchievementCountText}>Oppnådd {item.count} ganger</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -573,6 +629,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontStyle: 'italic',
+  },
+  // Sections in modal
+  sectionHeader: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+    marginBottom: 8,
+    opacity: 0.8,
+  },
+  sectionEmpty: {
+    fontSize: 13,
+    color: '#777',
+    marginBottom: 8,
   },
 });
 

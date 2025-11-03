@@ -43,9 +43,20 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       setLoading(false);
       
       if (error) {
-        console.error('Login error:', error);
+        // Only log in development, not in production
+        if (__DEV__) {
+          console.error('Login error:', error);
+        }
         // Show user-friendly error message
-        const errorMessage = error.message || 'Brukernavn/e-post eller passord er feil';
+        let errorMessage = 'Brukernavn/e-post eller passord er feil';
+        
+        // Check for specific error types
+        if (error.code === 'invalid_credentials' || error.message?.includes('Invalid')) {
+          errorMessage = 'Brukernavn/e-post eller passord er feil';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
         showAlert('Innlogging feilet', errorMessage);
       } else {
         // Success - navigate back to Home
@@ -53,7 +64,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       }
     } catch (err: any) {
       setLoading(false);
-      console.error('Login exception:', err);
+      // Only log in development
+      if (__DEV__) {
+        console.error('Login exception:', err);
+      }
       const errorMsg = err.message || 'Noe gikk galt under innlogging';
       showAlert('Feil', errorMsg);
     }

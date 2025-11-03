@@ -51,20 +51,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (emailOrUsername: string, password: string) => {
     let email = emailOrUsername.trim().toLowerCase();
 
-    // Check if input is username (doesn't contain @)
-    if (!emailOrUsername.includes('@')) {
-      console.log('Attempting login with username:', emailOrUsername);
-      
-      // Use RPC function to get email by username (bypasses RLS)
-      const { data: emailData, error: rpcError } = await supabase
-        .rpc('get_email_by_username', {
-          username_input: emailOrUsername.toLowerCase().trim()
-        });
-
-      console.log('RPC lookup result:', { emailData, rpcError });
+      // Check if input is username (doesn't contain @)
+      if (!emailOrUsername.includes('@')) {
+        // Use RPC function to get email by username (bypasses RLS)
+        const { data: emailData, error: rpcError } = await supabase
+          .rpc('get_email_by_username', {
+            username_input: emailOrUsername.toLowerCase().trim()
+          });
 
       if (rpcError) {
-        console.error('RPC lookup error:', rpcError);
+        if (__DEV__) {
+          console.error('RPC lookup error:', rpcError);
+        }
         return { 
           error: { 
             message: 'Brukernavn eller passord er feil',
@@ -79,7 +77,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const foundEmail = emailData as string | null;
 
       if (!foundEmail || foundEmail.trim() === '') {
-        console.error('No email found for username:', emailOrUsername, 'Data:', emailData);
+        if (__DEV__) {
+          console.error('No email found for username:', emailOrUsername);
+        }
         return { 
           error: { 
             message: 'Brukernavn eller passord er feil',
@@ -89,18 +89,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       email = foundEmail.trim().toLowerCase();
-      console.log('Found email for username:', email);
     }
-
-    console.log('Attempting login with email:', email);
 
     // Attempt sign in
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-
-    console.log('Sign in result:', { data, error });
 
     // Improve error message for user
     if (error) {

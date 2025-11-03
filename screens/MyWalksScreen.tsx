@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getUserWalks, Walk } from '../services/walkService';
 import { getDeviceId } from '../lib/deviceId';
 import AlertModal from '../components/AlertModal';
+import WalkMapView from '../components/WalkMapView';
 
 interface MyWalksScreenProps {
   navigation: any;
@@ -123,6 +124,17 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
               style={styles.walkCard}
               onPress={() => navigation.navigate('WalkDetail', { walkId: walk.id })}
             >
+              {/* Map preview */}
+              {Array.isArray(walk.route_coordinates) && walk.route_coordinates.length >= 2 && (
+                <View style={styles.mapWrapper}>
+                  <WalkMapView
+                    coordinates={walk.route_coordinates}
+                    height={180}
+                    showOpenButton={false}
+                  />
+                </View>
+              )}
+
               <View style={styles.walkHeader}>
                 <Text style={styles.walkDistance}>
                   {formatDistance(walk.distance_meters)}
@@ -243,6 +255,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+  },
+  mapWrapper: {
+    width: '100%',
+    height: 180,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: '#f0f0f0',
   },
   walkHeader: {
     flexDirection: 'row',

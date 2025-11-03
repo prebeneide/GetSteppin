@@ -25,6 +25,7 @@ import {
   unlikePost,
 } from '../services/postService';
 import AlertModal from '../components/AlertModal';
+import WalkMapView from '../components/WalkMapView';
 
 interface PostDetailScreenProps {
   navigation: any;
@@ -276,6 +277,15 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
               </View>
             </View>
           </View>
+
+          {/* Walk Map */}
+          {post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0 && (
+            <WalkMapView
+              coordinates={post.walk.route_coordinates}
+              height={250}
+              showOpenButton={true}
+            />
+          )}
 
           {post.content && (
             <Text style={styles.postContent}>{post.content}</Text>

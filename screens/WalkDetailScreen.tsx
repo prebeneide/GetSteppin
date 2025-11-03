@@ -8,15 +8,13 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
-  Linking,
 } from 'react-native';
-// MapView removed - requires native modules not available in Expo managed workflow
-// To enable maps, use expo-dev-client or EAS Build with react-native-maps configured
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Walk, WalkCoordinate } from '../services/walkService';
 import { createPostFromWalk } from '../services/postService';
 import AlertModal from '../components/AlertModal';
+import WalkMapView from '../components/WalkMapView';
 
 interface WalkDetailScreenProps {
   navigation: any;
@@ -141,42 +139,15 @@ export default function WalkDetailScreen({ navigation, route }: WalkDetailScreen
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Route Info */}
-        {coordinates.length > 0 && (
+        {/* Route Map */}
+        {coordinates.length >= 2 && (
           <View style={styles.routeContainer}>
             <Text style={styles.routeTitle}>📍 Rute</Text>
-            <Text style={styles.routeText}>
-              {coordinates.length} lokasjonspunkt registrert
-            </Text>
-            <View style={styles.coordinatesInfo}>
-              <View style={styles.coordinateItem}>
-                <Text style={styles.coordinateLabel}>Start:</Text>
-                <Text style={styles.coordinateValue}>
-                  {coordinates[0].lat.toFixed(6)}, {coordinates[0].lng.toFixed(6)}
-                </Text>
-              </View>
-              <View style={styles.coordinateItem}>
-                <Text style={styles.coordinateLabel}>Slutt:</Text>
-                <Text style={styles.coordinateValue}>
-                  {coordinates[coordinates.length - 1].lat.toFixed(6)}, {coordinates[coordinates.length - 1].lng.toFixed(6)}
-                </Text>
-              </View>
-            </View>
-            {walk.start_location_lat && walk.end_location_lat && (
-              <TouchableOpacity
-                style={styles.mapLinkButton}
-                onPress={() => {
-                  const url = `https://www.google.com/maps/dir/${walk.start_location_lat},${walk.start_location_lng}/${walk.end_location_lat},${walk.end_location_lng}`;
-                  Linking.openURL(url).catch(err => {
-                    console.error('Error opening map:', err);
-                    setAlertMessage('Kunne ikke åpne kart');
-                    setAlertVisible(true);
-                  });
-                }}
-              >
-                <Text style={styles.mapLinkText}>Åpne i Google Maps →</Text>
-              </TouchableOpacity>
-            )}
+            <WalkMapView
+              coordinates={coordinates}
+              height={300}
+              showOpenButton={true}
+            />
           </View>
         )}
 
@@ -322,55 +293,14 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   routeContainer: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 12,
-    padding: 16,
+    margin: 20,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   routeTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
-  },
-  routeText: {
-    fontSize: 14,
-    color: '#666',
     marginBottom: 12,
-  },
-  coordinatesInfo: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  coordinateItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  coordinateLabel: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '600',
-  },
-  coordinateValue: {
-    fontSize: 12,
-    color: '#999',
-    fontFamily: 'monospace',
-  },
-  mapLinkButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#1ED760',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  mapLinkText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   statsContainer: {
     flexDirection: 'row',

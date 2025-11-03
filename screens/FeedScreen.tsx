@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getFeedPosts, PostWithDetails, likePost, unlikePost } from '../services/postService';
 import AlertModal from '../components/AlertModal';
+import WalkMapView from '../components/WalkMapView';
 
 interface FeedScreenProps {
   navigation: any;
@@ -206,23 +207,26 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
 
               {/* Walk Info */}
               {post.walk && (
-                <View style={styles.walkInfo}>
-                  <Text style={styles.walkTitle}>
-                    👣 {formatDistance(post.walk.distance_meters)} tur
-                  </Text>
-                  <Text style={styles.walkStats}>
-                    {formatDuration(post.walk.duration_minutes)} •{' '}
-                    {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} skritt`}
-                  </Text>
+                <>
+                  <View style={styles.walkInfo}>
+                    <Text style={styles.walkTitle}>
+                      👣 {formatDistance(post.walk.distance_meters)} tur
+                    </Text>
+                    <Text style={styles.walkStats}>
+                      {formatDuration(post.walk.duration_minutes)} •{' '}
+                      {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} skritt`}
+                    </Text>
+                  </View>
+                  
+                  {/* Map View */}
                   {post.walk.route_coordinates && post.walk.route_coordinates.length > 0 && (
-                    <TouchableOpacity
-                      style={styles.viewWalkButton}
-                      onPress={() => navigation.navigate('WalkDetail', { walkId: post.walk!.id })}
-                    >
-                      <Text style={styles.viewWalkText}>Se rute →</Text>
-                    </TouchableOpacity>
+                    <WalkMapView
+                      coordinates={post.walk.route_coordinates}
+                      height={200}
+                      showOpenButton={false}
+                    />
                   )}
-                </View>
+                </>
               )}
 
               {/* Post Content */}
