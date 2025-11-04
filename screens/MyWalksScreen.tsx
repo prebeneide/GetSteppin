@@ -146,7 +146,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                 )}
               </View>
 
-              <View style={styles.walkStats}>
+              <View style={styles.walkStatsContainer}>
                 <View style={styles.statItem}>
                   <Text style={styles.statLabel}>Varighet</Text>
                   <Text style={styles.statValue}>
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  walkStats: {
+  walkStatsContainer: {
     flexDirection: 'row',
     gap: 20,
     marginBottom: 12,

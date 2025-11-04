@@ -1,0 +1,57 @@
+-- Create storage bucket for post images
+-- 
+-- IMPORTANT: This migration requires manual setup in Supabase Dashboard!
+-- Storage bucket and policies cannot be created via SQL migration due to permissions.
+--
+-- STEP 1: Create the bucket manually in Supabase Dashboard:
+--   1. Go to Storage in Supabase Dashboard
+--   2. Click "New Bucket"
+--   3. Name: "posts"
+--   4. Public bucket: YES (enable)
+--   5. Click "Create bucket"
+--
+-- STEP 2: Set up policies manually in Supabase Dashboard:
+--   1. Go to Storage > posts bucket
+--   2. Click on "Policies" tab
+--   3. Click "New Policy"
+--
+--   Policy 1: Public Access (SELECT)
+--     - Policy name: "Public Access Posts"
+--     - Allowed operation: SELECT
+--     - Target roles: anon, authenticated
+--     - USING expression: bucket_id = 'posts'
+--
+--   Policy 2: Upload Images (INSERT)
+--     - Policy name: "Authenticated users can upload post images"
+--     - Allowed operation: INSERT
+--     - Target roles: authenticated
+--     - WITH CHECK expression:
+--       bucket_id = 'posts' AND
+--       auth.role() = 'authenticated' AND
+--       (storage.foldername(name))[1] = 'posts'
+--
+--   Policy 3: Update Images (UPDATE)
+--     - Policy name: "Authenticated users can update own post images"
+--     - Allowed operation: UPDATE
+--     - Target roles: authenticated
+--     - USING expression:
+--       bucket_id = 'posts' AND
+--       auth.role() = 'authenticated' AND
+--       (storage.foldername(name))[2] = auth.uid()::text
+--
+--   Policy 4: Delete Images (DELETE)
+--     - Policy name: "Authenticated users can delete own post images"
+--     - Allowed operation: DELETE
+--     - Target roles: authenticated
+--     - USING expression:
+--       bucket_id = 'posts' AND
+--       auth.role() = 'authenticated' AND
+--       (storage.foldername(name))[2] = auth.uid()::text
+--
+-- NOTE: If you have admin/service_role access, you can run these policies
+-- via Supabase CLI or API, but they cannot be run via regular SQL migrations
+-- due to permission restrictions.
+
+-- This migration file exists for documentation purposes only
+-- No SQL code can be executed here due to storage.objects permission restrictions
+

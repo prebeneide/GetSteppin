@@ -25,7 +25,8 @@ import {
   unlikePost,
 } from '../services/postService';
 import AlertModal from '../components/AlertModal';
-import WalkMapView from '../components/WalkMapView';
+import MediaGallery from '../components/MediaGallery';
+import { getAllImageUrls } from '../services/postService';
 
 interface PostDetailScreenProps {
   navigation: any;
@@ -72,7 +73,10 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
         user_id: postData.user_id,
         walk_id: postData.walk_id,
         content: postData.content,
-        image_url: postData.image_url,
+        image_url: postData.image_url || null,
+        images: postData.images || null,
+        primary_image_index: postData.primary_image_index || 0,
+        map_position: postData.map_position !== undefined ? postData.map_position : -1,
         created_at: postData.created_at,
         updated_at: postData.updated_at,
         username: postData.user?.username || 'Ukjent',
@@ -278,26 +282,29 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
             </View>
           </View>
 
-          {/* Walk Map */}
-          {post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0 && (
-            <WalkMapView
-              coordinates={post.walk.route_coordinates}
-              height={250}
-              showOpenButton={true}
-            />
-          )}
-
           {post.content && (
             <Text style={styles.postContent}>{post.content}</Text>
           )}
 
-          {post.image_url && (
-            <Image
-              source={{ uri: post.image_url }}
-              style={styles.postImage}
-              resizeMode="cover"
-            />
-          )}
+          {/* Media Gallery (images + map in same slider, like Strava) */}
+          {(() => {
+            const imageUrls = getAllImageUrls(post);
+            const hasImages = imageUrls.length > 0;
+            const hasMap = post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0;
+            
+            if (hasImages || hasMap) {
+              return (
+                <MediaGallery
+                  images={imageUrls}
+                  coordinates={post.walk?.route_coordinates || undefined}
+                  primaryImageIndex={post.primary_image_index || 0}
+                  mapPosition={post.map_position !== undefined ? post.map_position : -1}
+                  height={300}
+                />
+              );
+            }
+            return null;
+          })()}
 
           <View style={styles.postActions}>
             <TouchableOpacity

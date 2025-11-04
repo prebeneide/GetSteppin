@@ -1,12 +1,20 @@
 import { supabase } from '../lib/supabase';
 import { Walk } from './walkService';
 
+export interface PostImage {
+  url: string;
+  index: number;
+}
+
 export interface Post {
   id: string;
   user_id: string;
   walk_id: string | null;
   content: string | null;
-  image_url: string | null;
+  image_url: string | null; // Legacy - keep for backward compatibility
+  images: PostImage[] | null; // New: array of images
+  primary_image_index: number; // Index of primary image to display first
+  map_position: number; // Position in media slider where map appears (-1 = end, 0+ = after image index)
   created_at: string;
   updated_at: string;
 }
@@ -20,6 +28,32 @@ export interface PostWithDetails extends Post {
   is_liked: boolean;
   has_user_liked: boolean; // Alias for is_liked
 }
+
+/**
+ * Helper to get primary image URL (supports both legacy image_url and new images array)
+ */
+export const getPrimaryImageUrl = (post: Post): string | null => {
+  if (post.images && post.images.length > 0) {
+    const primaryIndex = post.primary_image_index || 0;
+    const primaryImage = post.images.find(img => img.index === primaryIndex) || post.images[0];
+    return primaryImage?.url || null;
+  }
+  // Fallback to legacy image_url
+  return post.image_url || null;
+};
+
+/**
+ * Helper to get all image URLs
+ */
+export const getAllImageUrls = (post: Post): string[] => {
+  if (post.images && post.images.length > 0) {
+    return post.images
+      .sort((a, b) => a.index - b.index)
+      .map(img => img.url);
+  }
+  // Fallback to legacy image_url
+  return post.image_url ? [post.image_url] : [];
+};
 
 export interface PostLike {
   id: string;
@@ -41,12 +75,15 @@ export interface PostComment {
 
 /**
  * Create a post from a walk (called after walk is saved)
+ * Supports multiple images with primary image selection
  */
 export const createPostFromWalk = async (
   walkId: string,
   userId: string,
   content: string | null = null,
-  imageUrl: string | null = null
+  images: Array<{ url: string; index: number }> | null = null,
+  primaryImageIndex: number = 0,
+  mapPosition: number = -1 // -1 = end, 0+ = after image index
 ): Promise<{ data: Post | null; error: any }> => {
   try {
     // Check if post already exists for this walk
@@ -56,15 +93,34 @@ export const createPostFromWalk = async (
       .eq('walk_id', walkId)
       .single();
 
+    // Prepare images data
+    const imagesData = images && images.length > 0 ? images : null;
+    
+    // Keep legacy image_url for backward compatibility (use primary image if exists)
+    const legacyImageUrl = imagesData && imagesData.length > 0
+      ? imagesData.find(img => img.index === primaryImageIndex)?.url || imagesData[0]?.url || null
+      : null;
+
     if (existingPost) {
       // Post already exists, update it
+      const updateData: any = {
+        content: content || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (imagesData) {
+        updateData.images = imagesData;
+        updateData.primary_image_index = primaryImageIndex;
+        updateData.map_position = mapPosition;
+        // Keep legacy image_url for backward compatibility
+        updateData.image_url = legacyImageUrl;
+      } else {
+        updateData.map_position = mapPosition;
+      }
+
       const { data, error } = await supabase
         .from('posts')
-        .update({
-          content: content || null,
-          image_url: imageUrl || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updateData)
         .eq('id', existingPost.id)
         .select()
         .single();
@@ -88,8 +144,16 @@ export const createPostFromWalk = async (
       user_id: userId,
       walk_id: walkId,
       content: content || null,
-      image_url: imageUrl || null,
     };
+
+    if (imagesData) {
+      insertData.images = imagesData;
+      insertData.primary_image_index = primaryImageIndex;
+      insertData.map_position = mapPosition;
+      insertData.image_url = legacyImageUrl; // Backward compatibility
+    } else {
+      insertData.map_position = mapPosition;
+    }
 
     const { data, error } = await supabase
       .from('posts')
@@ -149,7 +213,10 @@ export const getFeedPosts = async (
       user_id: post.user_id,
       walk_id: post.walk_id,
       content: post.content,
-      image_url: post.image_url,
+      image_url: post.image_url || null,
+      images: post.images || null,
+      primary_image_index: post.primary_image_index || 0,
+      map_position: post.map_position !== undefined ? post.map_position : -1,
       created_at: post.created_at,
       updated_at: post.updated_at,
       username: post.username || 'Ukjent',
@@ -163,14 +230,14 @@ export const getFeedPosts = async (
 
     // If not enough posts, add popular posts
     if (transformedPosts.length < limit) {
-      const { data: popularPosts } = await getPopularPosts(
+      const popularPostsResult = await getPopularPosts(
         limit - transformedPosts.length,
         offset
       );
       
       const combined = [
         ...transformedPosts,
-        ...(popularPosts.data || []),
+        ...(popularPostsResult.data || []),
       ];
 
       // Remove duplicates
@@ -220,7 +287,10 @@ export const getPopularPosts = async (
       user_id: post.user_id,
       walk_id: post.walk_id,
       content: post.content,
-      image_url: post.image_url,
+      image_url: post.image_url || null,
+      images: post.images || null,
+      primary_image_index: post.primary_image_index || 0,
+      map_position: post.map_position !== undefined ? post.map_position : -1,
       created_at: post.created_at,
       updated_at: post.updated_at,
       username: post.user?.username || 'Ukjent',
@@ -273,7 +343,10 @@ export const getUserPosts = async (
       user_id: post.user_id,
       walk_id: post.walk_id,
       content: post.content,
-      image_url: post.image_url,
+      image_url: post.image_url || null,
+      images: post.images || null,
+      primary_image_index: post.primary_image_index || 0,
+      map_position: post.map_position !== undefined ? post.map_position : -1,
       created_at: post.created_at,
       updated_at: post.updated_at,
       username: post.user?.username || 'Ukjent',
@@ -398,6 +471,79 @@ export const getPostComments = async (
   } catch (err) {
     console.error('Error in getPostComments:', err);
     return { data: [], error: err };
+  }
+};
+
+/**
+ * Get post by walk_id
+ */
+export const getPostByWalkId = async (
+  walkId: string
+): Promise<{ data: Post | null; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('walk_id', walkId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No post found
+        return { data: null, error: null };
+      }
+      return { data: null, error };
+    }
+
+    return { data: data as Post, error: null };
+  } catch (err) {
+    console.error('Error in getPostByWalkId:', err);
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Delete a post and unshare the walk
+ */
+export const deletePost = async (
+  postId: string,
+  walkId: string
+): Promise<{ error: any }> => {
+  try {
+    // Get post images before deleting
+    const { data: postData } = await supabase
+      .from('posts')
+      .select('images')
+      .eq('id', postId)
+      .single();
+
+    // Delete post
+    const { error: deleteError } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId);
+
+    if (deleteError) {
+      return { error: deleteError };
+    }
+
+    // Also delete related likes and comments (if cascading isn't set up)
+    await supabase.from('post_likes').delete().eq('post_id', postId);
+    await supabase.from('post_comments').delete().eq('post_id', postId);
+
+    // Unshare the walk
+    await supabase
+      .from('walks')
+      .update({ is_shared: false })
+      .eq('id', walkId);
+
+    // Note: We could also delete images from storage here if needed
+    // For now, we'll keep them in case user wants to reuse them
+
+    return { error: null };
+  } catch (err) {
+    console.error('Error in deletePost:', err);
+    return { error: err };
   }
 };
 

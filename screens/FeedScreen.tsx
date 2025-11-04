@@ -12,7 +12,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getFeedPosts, PostWithDetails, likePost, unlikePost } from '../services/postService';
 import AlertModal from '../components/AlertModal';
-import WalkMapView from '../components/WalkMapView';
+import MediaGallery from '../components/MediaGallery';
+import { getAllImageUrls } from '../services/postService';
 
 interface FeedScreenProps {
   navigation: any;
@@ -207,26 +208,15 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
 
               {/* Walk Info */}
               {post.walk && (
-                <>
-                  <View style={styles.walkInfo}>
-                    <Text style={styles.walkTitle}>
-                      👣 {formatDistance(post.walk.distance_meters)} tur
-                    </Text>
-                    <Text style={styles.walkStats}>
-                      {formatDuration(post.walk.duration_minutes)} •{' '}
-                      {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} skritt`}
-                    </Text>
-                  </View>
-                  
-                  {/* Map View */}
-                  {post.walk.route_coordinates && post.walk.route_coordinates.length > 0 && (
-                    <WalkMapView
-                      coordinates={post.walk.route_coordinates}
-                      height={200}
-                      showOpenButton={false}
-                    />
-                  )}
-                </>
+                <View style={styles.walkInfo}>
+                  <Text style={styles.walkTitle}>
+                    👣 {formatDistance(post.walk.distance_meters)} tur
+                  </Text>
+                  <Text style={styles.walkStats}>
+                    {formatDuration(post.walk.duration_minutes)} •{' '}
+                    {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} skritt`}
+                  </Text>
+                </View>
               )}
 
               {/* Post Content */}
@@ -234,14 +224,25 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
                 <Text style={styles.postContent}>{post.content}</Text>
               )}
 
-              {/* Post Image */}
-              {post.image_url && (
-                <Image
-                  source={{ uri: post.image_url }}
-                  style={styles.postImage}
-                  resizeMode="cover"
-                />
-              )}
+              {/* Media Gallery (images + map in same slider, like Strava) */}
+              {(() => {
+                const imageUrls = getAllImageUrls(post);
+                const hasImages = imageUrls.length > 0;
+                const hasMap = post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0;
+                
+                if (hasImages || hasMap) {
+                  return (
+                    <MediaGallery
+                      images={imageUrls}
+                      coordinates={post.walk?.route_coordinates || undefined}
+                      primaryImageIndex={post.primary_image_index || 0}
+                      mapPosition={post.map_position !== undefined ? post.map_position : -1}
+                      height={300}
+                    />
+                  );
+                }
+                return null;
+              })()}
 
               {/* Post Actions */}
               <View style={styles.postActions}>
