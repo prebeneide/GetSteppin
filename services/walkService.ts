@@ -25,6 +25,7 @@ export interface Walk {
   end_location_lat: number | null;
   end_location_lng: number | null;
   is_shared: boolean;
+  is_viewed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -100,9 +101,131 @@ export const isAutoShareEnabled = async (
 };
 
 /**
+ * Get home area settings for user
+ */
+export interface HomeAreaSettings {
+  home_area_radius_meters: number;
+  home_latitude: number | null;
+  home_longitude: number | null;
+  min_walk_distance_meters: number;
+  min_walk_speed_kmh: number;
+  max_walk_speed_kmh: number;
+  pause_tolerance_minutes: number;
+  pause_radius_meters: number;
+}
+
+export const getHomeAreaSettings = async (
+  userId: string | null
+): Promise<HomeAreaSettings> => {
+  try {
+    if (!userId) {
+      // For anonymous users, check device_settings
+      const deviceId = await getDeviceId();
+      const { data, error } = await supabase
+        .from('device_settings')
+        .select('home_area_radius_meters, home_latitude, home_longitude, min_walk_distance_meters, min_walk_speed_kmh, max_walk_speed_kmh, pause_tolerance_minutes, pause_radius_meters')
+        .eq('device_id', deviceId)
+        .single();
+
+      if (error || !data) {
+        // Return defaults
+        return {
+          home_area_radius_meters: 50,
+          home_latitude: null,
+          home_longitude: null,
+          min_walk_distance_meters: 1000,
+          min_walk_speed_kmh: 3.0,
+          max_walk_speed_kmh: 15.0,
+          pause_tolerance_minutes: 15,
+          pause_radius_meters: 10,
+        };
+      }
+
+      return {
+        home_area_radius_meters: data.home_area_radius_meters || 50,
+        home_latitude: data.home_latitude,
+        home_longitude: data.home_longitude,
+        min_walk_distance_meters: data.min_walk_distance_meters || 1000,
+        min_walk_speed_kmh: data.min_walk_speed_kmh || 3.0,
+        max_walk_speed_kmh: data.max_walk_speed_kmh || 15.0,
+        pause_tolerance_minutes: data.pause_tolerance_minutes || 15,
+        pause_radius_meters: data.pause_radius_meters || 10,
+      };
+    }
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('home_area_radius_meters, home_latitude, home_longitude, min_walk_distance_meters, min_walk_speed_kmh, max_walk_speed_kmh, pause_tolerance_minutes, pause_radius_meters')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data) {
+        // Return defaults
+        return {
+          home_area_radius_meters: 50,
+          home_latitude: null,
+          home_longitude: null,
+          min_walk_distance_meters: 1000,
+          min_walk_speed_kmh: 3.0,
+          max_walk_speed_kmh: 15.0,
+          pause_tolerance_minutes: 15,
+          pause_radius_meters: 10,
+        };
+      }
+
+      return {
+        home_area_radius_meters: data.home_area_radius_meters || 50,
+        home_latitude: data.home_latitude,
+        home_longitude: data.home_longitude,
+        min_walk_distance_meters: data.min_walk_distance_meters || 1000,
+        min_walk_speed_kmh: data.min_walk_speed_kmh || 3.0,
+        max_walk_speed_kmh: data.max_walk_speed_kmh || 15.0,
+        pause_tolerance_minutes: data.pause_tolerance_minutes || 15,
+        pause_radius_meters: data.pause_radius_meters || 10,
+      };
+  } catch (err) {
+    console.error('Error getting home area settings:', err);
+    // Return defaults
+    return {
+      home_area_radius_meters: 50,
+      home_latitude: null,
+      home_longitude: null,
+      min_walk_distance_meters: 1000,
+      min_walk_speed_kmh: 3.0,
+      max_walk_speed_kmh: 15.0,
+      pause_tolerance_minutes: 15,
+      pause_radius_meters: 10,
+    };
+  }
+};
+
+/**
+ * Check if user is outside home area
+ */
+export const isOutsideHomeArea = (
+  currentLat: number,
+  currentLng: number,
+  settings: HomeAreaSettings
+): boolean => {
+  // If home location is not set, allow tracking everywhere
+  if (!settings.home_latitude || !settings.home_longitude) {
+    return true;
+  }
+
+  const distance = calculateDistance(
+    currentLat,
+    currentLng,
+    settings.home_latitude,
+    settings.home_longitude
+  );
+
+  return distance > settings.home_area_radius_meters;
+};
+
+/**
  * Calculate distance between two coordinates (Haversine formula)
  */
-const calculateDistance = (
+export const calculateDistance = (
   lat1: number,
   lng1: number,
   lat2: number,
@@ -206,9 +329,12 @@ export const saveWalk = async (
 
     const distanceMeters = calculateTotalDistance(coordinates);
     
-    if (distanceMeters < 1000) {
-      // Less than 1km, don't save
-      return { data: null, error: { message: 'Distance less than 1km' } };
+    // Get user's minimum walk distance setting
+    const settings = await getHomeAreaSettings(userId);
+    
+    if (distanceMeters < settings.min_walk_distance_meters) {
+      // Less than minimum distance, don't save
+      return { data: null, error: { message: `Distance less than ${settings.min_walk_distance_meters}m` } };
     }
 
     const { average, max } = calculateSpeed(coordinates);
@@ -230,6 +356,7 @@ export const saveWalk = async (
       end_location_lat: coordinates[coordinates.length - 1].lat,
       end_location_lng: coordinates[coordinates.length - 1].lng,
       is_shared: autoShare, // Auto-share if enabled
+      is_viewed: false, // New walks are unviewed by default
     };
 
     if (userId) {
@@ -305,6 +432,82 @@ export const getUserWalks = async (
   } catch (err) {
     console.error('Error in getUserWalks:', err);
     return { data: [], error: err };
+  }
+};
+
+/**
+ * Get count of unviewed walks for a user
+ */
+export const getUnviewedWalksCount = async (
+  userId: string | null,
+  deviceId: string | null
+): Promise<number> => {
+  try {
+    let query = supabase
+      .from('walks')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_viewed', false);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else if (deviceId) {
+      query = query.eq('device_id', deviceId).is('user_id', null);
+    } else {
+      return 0;
+    }
+
+    const { count, error } = await query;
+
+    if (error) {
+      console.error('Error getting unviewed walks count:', error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (err) {
+    console.error('Error in getUnviewedWalksCount:', err);
+    return 0;
+  }
+};
+
+/**
+ * Mark walks as viewed
+ */
+export const markWalksAsViewed = async (
+  userId: string | null,
+  deviceId: string | null,
+  walkIds?: string[] // If provided, only mark these specific walks
+): Promise<{ error: any }> => {
+  try {
+    let query = supabase
+      .from('walks')
+      .update({ is_viewed: true })
+      .eq('is_viewed', false);
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else if (deviceId) {
+      query = query.eq('device_id', deviceId).is('user_id', null);
+    } else {
+      return { error: { message: 'Either userId or deviceId required' } };
+    }
+
+    // If specific walk IDs provided, only mark those
+    if (walkIds && walkIds.length > 0) {
+      query = query.in('id', walkIds);
+    }
+
+    const { error } = await query;
+
+    if (error) {
+      console.error('Error marking walks as viewed:', error);
+      return { error };
+    }
+
+    return { error: null };
+  } catch (err) {
+    console.error('Error in markWalksAsViewed:', err);
+    return { error: err };
   }
 };
 
