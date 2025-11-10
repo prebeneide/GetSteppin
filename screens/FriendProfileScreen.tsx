@@ -15,6 +15,10 @@ import AchievementsView from '../components/AchievementsView';
 import OnlineIndicator from '../components/OnlineIndicator';
 import { getFriendCount } from '../services/friendService';
 import { getTotalSteps, getTotalDistanceKm } from '../services/stepService';
+import { formatDistance, DistanceUnit } from '../lib/formatters';
+import { getUserPreferences } from '../lib/userPreferences';
+import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../lib/i18n';
 
 /**
  * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
@@ -126,6 +130,8 @@ export default function FriendProfileScreen({
   navigation,
   route,
 }: FriendProfileScreenProps) {
+  const { t } = useTranslation();
+  const { user } = useAuth();
   const friendId = route?.params?.friendId || '';
   const initialUsername = route?.params?.friendUsername;
   const initialAvatarUrl = route?.params?.friendAvatarUrl;
@@ -136,6 +142,8 @@ export default function FriendProfileScreen({
   const [friendCount, setFriendCount] = useState<number | null>(null);
   const [totalSteps, setTotalSteps] = useState<number | null>(null);
   const [totalKm, setTotalKm] = useState<number | null>(null);
+  const [totalDistanceMeters, setTotalDistanceMeters] = useState<number | null>(null);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
 
   useEffect(() => {
     if (friendId) {
@@ -144,7 +152,28 @@ export default function FriendProfileScreen({
       setError('Ingen venn ID oppgitt');
       setLoading(false);
     }
+    loadPreferences();
   }, [friendId]);
+
+  useEffect(() => {
+    loadPreferences();
+  }, [user]);
+
+  // Reload preferences when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPreferences();
+    }, [user])
+  );
+
+  const loadPreferences = async () => {
+    try {
+      const preferences = await getUserPreferences(user?.id || null);
+      setDistanceUnit(preferences.distance_unit);
+    } catch (err) {
+      console.error('Error loading preferences:', err);
+    }
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -167,7 +196,7 @@ export default function FriendProfileScreen({
 
       if (profileError) {
         console.error('Error loading friend profile:', profileError);
-        setError('Kunne ikke laste vennens profil');
+        setError(t('screens.friendProfile.couldNotLoad'));
       } else if (data) {
         setProfile(data);
       }
@@ -197,21 +226,23 @@ export default function FriendProfileScreen({
         setTotalSteps(totalStepsData);
       }
 
-      // Hent totalt antall km
+      // Hent totalt antall km (for backwards compatibility)
       const { data: totalKmData, error: kmError } = await getTotalDistanceKm(friendId);
       if (!kmError && totalKmData !== null) {
         setTotalKm(totalKmData);
+        // Convert km to meters for formatDistance
+        setTotalDistanceMeters(totalKmData * 1000);
       }
     } catch (err) {
       console.error('Error in loadFriendProfile:', err);
-      setError('Noe gikk galt');
+      setError(t('common.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
   };
 
   // Use loaded profile or fallback to route params
-  const displayUsername = profile?.username || initialUsername || 'Venn';
+  const displayUsername = profile?.username || initialUsername || t('screens.friendProfile.friend');
   const displayAvatarUrl = profile?.avatar_url || initialAvatarUrl;
 
   if (loading) {
@@ -219,7 +250,7 @@ export default function FriendProfileScreen({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -234,12 +265,12 @@ export default function FriendProfileScreen({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
-            {error || 'Kunne ikke laste vennens profil'}
+            {error || t('screens.friendProfile.couldNotLoad')}
           </Text>
         </View>
       </View>
@@ -250,9 +281,9 @@ export default function FriendProfileScreen({
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>{t('common.backArrow')}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Vennens profil</Text>
+        <Text style={styles.headerTitle}>{t('screens.friendProfile.title')}</Text>
         <TouchableOpacity
           style={styles.chatButton}
           onPress={() =>
@@ -301,29 +332,29 @@ export default function FriendProfileScreen({
             <Text style={styles.statValue}>
               {formatLargeNumber(friendCount)}
             </Text>
-            <Text style={styles.statLabel}>venner</Text>
+            <Text style={styles.statLabel}>{t('screens.friendProfile.friends')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
               {formatLargeNumber(totalSteps)}
             </Text>
-            <Text style={styles.statLabel}>skritt totalt</Text>
+            <Text style={styles.statLabel}>{t('screens.home.steps')} {t('screens.home.total')}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={styles.statValue}>
-              {formatKm(totalKm)}
+              {totalDistanceMeters !== null ? formatDistance(totalDistanceMeters, distanceUnit) : '-'}
             </Text>
-            <Text style={styles.statLabel}>km totalt</Text>
+            <Text style={styles.statLabel}>{t('screens.home.total')}</Text>
           </View>
         </View>
 
         {profile.daily_step_goal && (
           <View style={styles.goalContainer}>
-            <Text style={styles.goalLabel}>Daglig mål</Text>
+            <Text style={styles.goalLabel}>{t('screens.home.goal')}</Text>
             <Text style={styles.goalValue}>
-              {profile.daily_step_goal.toLocaleString()} skritt
+              {profile.daily_step_goal.toLocaleString()} {t('screens.home.steps')}
             </Text>
           </View>
         )}

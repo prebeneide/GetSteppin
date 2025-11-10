@@ -11,12 +11,14 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface SignUpScreenProps {
   navigation: any;
 }
 
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -39,24 +41,24 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
 
   // Email validation
   const validateEmail = (value: string) => {
-    if (!value) return 'E-post er påkrevd';
+    if (!value) return t('screens.signUp.emailRequired');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(value)) return 'Ugyldig e-postformat';
+    if (!emailRegex.test(value)) return t('screens.signUp.emailInvalid');
     return '';
   };
 
   // Password validation
   const validatePassword = (value: string) => {
-    if (!value) return 'Passord er påkrevd';
-    if (value.length < 6) return 'Passord må være minst 6 tegn';
+    if (!value) return t('screens.signUp.passwordRequired');
+    if (value.length < 6) return t('screens.signUp.passwordMinLength');
     return '';
   };
 
   // Username validation
   const validateUsername = (value: string) => {
-    if (!value) return 'Brukernavn er påkrevd';
-    if (value.length < 3) return 'Brukernavn må være minst 3 tegn';
-    if (!/^[a-zA-Z0-9_]+$/.test(value)) return 'Brukernavn kan bare inneholde bokstaver, tall og underscore';
+    if (!value) return t('screens.signUp.usernameRequired');
+    if (value.length < 3) return t('screens.signUp.usernameMinLength');
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) return t('screens.signUp.usernameInvalid');
     return '';
   };
 
@@ -103,7 +105,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   ) => {
     setAlertTitle(title);
     setAlertMessage(message);
-    setAlertButtons(buttons || [{ text: 'OK' }]);
+    setAlertButtons(buttons || [{ text: t('common.ok') }]);
     setAlertVisible(true);
   };
 
@@ -134,16 +136,16 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
 
       if (error) {
         console.error('Sign up error:', error);
-        const errorMsg = error.message || 'Noe gikk galt';
-        showAlert('Registrering feilet', errorMsg);
+        const errorMsg = error.message || t('common.error');
+        showAlert(t('screens.signUp.title'), errorMsg);
       } else {
         // Show success message and navigate
         showAlert(
-          '🎉 Suksess!',
-          'Konto opprettet! Du kan nå logge inn.',
+          t('common.success'),
+          t('screens.signUp.title') + ' ' + t('common.success'),
           [
             {
-              text: 'OK',
+              text: t('common.ok'),
               onPress: () => {
                 // Clear form
                 setEmail('');
@@ -158,8 +160,8 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
     } catch (err: any) {
       setLoading(false);
       console.error('Sign up exception:', err);
-      const errorMsg = err.message || 'Noe gikk galt under registrering';
-      showAlert('Feil', errorMsg);
+      const errorMsg = err.message || t('common.error');
+      showAlert(t('common.error'), errorMsg);
     }
   };
 
@@ -173,18 +175,18 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.navigate('Home')}
         >
-          <Text style={styles.backButtonText}>← Hjem</Text>
+          <Text style={styles.backButtonText}>← {t('navigation.home')}</Text>
         </TouchableOpacity>
       </View>
       
       <View style={styles.content}>
-        <Text style={styles.title}>Opprett konto</Text>
-        <Text style={styles.subtitle}>Registrer deg for å komme i gang</Text>
+        <Text style={styles.title}>{t('screens.signUp.title')}</Text>
+        <Text style={styles.subtitle}>{t('screens.signUp.subtitle')}</Text>
 
         <View>
           <TextInput
             style={[styles.input, touched.username && errors.username && styles.inputError]}
-            placeholder="Brukernavn"
+            placeholder={t('screens.signUp.username')}
             value={username}
             onChangeText={handleUsernameChange}
             onBlur={() => handleBlur('username')}
@@ -199,7 +201,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
         <View>
           <TextInput
             style={[styles.input, touched.email && errors.email && styles.inputError]}
-            placeholder="E-post"
+            placeholder={t('screens.signUp.email')}
             value={email}
             onChangeText={handleEmailChange}
             onBlur={() => handleBlur('email')}
@@ -215,7 +217,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
         <View>
           <TextInput
             style={[styles.input, touched.password && errors.password && styles.inputError]}
-            placeholder="Passord (minimum 6 tegn)"
+            placeholder={t('screens.signUp.password')}
             value={password}
             onChangeText={handlePasswordChange}
             onBlur={() => handleBlur('password')}
@@ -236,10 +238,10 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
           {loading ? (
             <View style={styles.buttonLoading}>
               <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.buttonText}>Oppretter...</Text>
+              <Text style={styles.buttonText}>{t('common.loading')}</Text>
             </View>
           ) : (
-            <Text style={styles.buttonText}>Opprett konto</Text>
+            <Text style={styles.buttonText}>{t('screens.signUp.signUpButton')}</Text>
           )}
         </TouchableOpacity>
 
@@ -248,7 +250,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
           onPress={() => navigation.navigate('Login')}
         >
           <Text style={styles.linkText}>
-            Har du allerede konto? Logg inn
+            {t('screens.signUp.loginPrompt')} {t('screens.signUp.loginLink')}
           </Text>
         </TouchableOpacity>
       </View>

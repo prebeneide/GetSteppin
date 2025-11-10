@@ -11,12 +11,14 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface LoginScreenProps {
   navigation: any;
 }
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      showAlert('Feil', 'Vennligst fyll inn både e-post/brukernavn og passord');
+      showAlert(t('common.error'), t('screens.login.email') + ' / ' + t('screens.login.password') + ' ' + t('common.error'));
       return;
     }
 
@@ -48,16 +50,16 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           console.error('Login error:', error);
         }
         // Show user-friendly error message
-        let errorMessage = 'Brukernavn/e-post eller passord er feil';
+        let errorMessage = t('screens.login.email') + ' / ' + t('screens.login.password') + ' ' + t('common.error');
         
         // Check for specific error types
         if (error.code === 'invalid_credentials' || error.message?.includes('Invalid')) {
-          errorMessage = 'Brukernavn/e-post eller passord er feil';
+          errorMessage = t('screens.login.email') + ' / ' + t('screens.login.password') + ' ' + t('common.error');
         } else if (error.message) {
           errorMessage = error.message;
         }
         
-        showAlert('Innlogging feilet', errorMessage);
+        showAlert(t('screens.login.title'), errorMessage);
       } else {
         // Success - navigate back to Home
         navigation.navigate('Home');
@@ -68,8 +70,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       if (__DEV__) {
         console.error('Login exception:', err);
       }
-      const errorMsg = err.message || 'Noe gikk galt under innlogging';
-      showAlert('Feil', errorMsg);
+      const errorMsg = err.message || t('common.error');
+      showAlert(t('common.error'), errorMsg);
     }
   };
 
@@ -84,17 +86,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             style={styles.backButton}
             onPress={() => navigation.navigate('Home')}
           >
-            <Text style={styles.backButtonText}>← Hjem</Text>
+            <Text style={styles.backButtonText}>← {t('navigation.home')}</Text>
           </TouchableOpacity>
         </View>
         
         <View style={styles.content}>
-          <Text style={styles.title}>Steppin</Text>
-          <Text style={styles.subtitle}>Logg inn på din konto</Text>
+          <Text style={styles.title}>GetSteppin</Text>
+          <Text style={styles.subtitle}>{t('screens.login.title')}</Text>
 
           <TextInput
             style={styles.input}
-            placeholder="E-post eller brukernavn"
+            placeholder={t('screens.login.email')}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -104,7 +106,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
           <TextInput
             style={styles.input}
-            placeholder="Passord"
+            placeholder={t('screens.login.password')}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -121,10 +123,10 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             {loading ? (
               <View style={styles.buttonLoading}>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.buttonText}>Logger inn...</Text>
+                <Text style={styles.buttonText}>{t('common.loading')}</Text>
               </View>
             ) : (
-              <Text style={styles.buttonText}>Logg inn</Text>
+              <Text style={styles.buttonText}>{t('screens.login.loginButton')}</Text>
             )}
           </TouchableOpacity>
 
@@ -134,7 +136,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             disabled={loading}
           >
             <Text style={styles.linkText}>
-              Har du ikke konto? Registrer deg
+              {t('screens.login.signUpPrompt')} {t('screens.login.signUpLink')}
             </Text>
           </TouchableOpacity>
         </View>

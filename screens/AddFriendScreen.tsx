@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { searchUsers, sendFriendRequest, type Friend } from '../services/friendService';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface AddFriendScreenProps {
   navigation: any;
@@ -19,6 +20,7 @@ interface AddFriendScreenProps {
 
 export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Friend[]>([]);
   const [searching, setSearching] = useState(false);
@@ -45,14 +47,14 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
 
       if (error) {
         console.error('Error searching users:', error);
-        showAlert('Feil', 'Kunne ikke søke etter brukere');
+        showAlert(t('common.error'), t('screens.addFriend.noResults'));
         setSearchResults([]);
       } else {
         setSearchResults(data || []);
       }
     } catch (err) {
       console.error('Error in handleSearch:', err);
-      showAlert('Feil', 'Noe gikk galt');
+      showAlert(t('common.error'), t('common.error'));
       setSearchResults([]);
     } finally {
       setSearching(false);
@@ -64,15 +66,15 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
 
     // Sjekk om det allerede er et vennskap
     if (friend.status === 'accepted') {
-      showAlert('Info', `${friend.username} er allerede din venn`);
+      showAlert(t('common.success'), `${friend.username} ${t('screens.addFriend.alreadyFriends')}`);
       return;
     }
 
     if (friend.status === 'pending') {
       if (friend.is_requester) {
-        showAlert('Info', 'Du har allerede sendt en forespørsel til denne brukeren');
+        showAlert(t('common.success'), t('screens.addFriend.requestSent'));
       } else {
-        showAlert('Info', 'Denne brukeren har allerede sendt deg en forespørsel. Sjekk "Venneforespørsler"');
+        showAlert(t('common.success'), t('screens.friends.friendRequests'));
       }
       return;
     }
@@ -82,9 +84,9 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
       const { error } = await sendFriendRequest(user.id, friend.id);
 
       if (error) {
-        showAlert('Feil', error.message || 'Kunne ikke sende venneforespørsel');
+        showAlert(t('common.error'), error.message || t('common.error'));
       } else {
-        showAlert('Suksess', `Venneforespørsel sendt til ${friend.username}!`);
+        showAlert(t('common.success'), `${t('screens.addFriend.requestSent')} ${friend.username}!`);
         // Oppdater status for denne brukeren i søkeresultatene
         setSearchResults(prev =>
           prev.map(f =>
@@ -95,18 +97,18 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
         );
       }
     } catch (err) {
-      showAlert('Feil', 'Noe gikk galt');
+      showAlert(t('common.error'), t('common.error'));
     } finally {
       setSendingRequest(null);
     }
   };
 
   const getButtonText = (friend: Friend): string => {
-    if (friend.status === 'accepted') return 'Allerede venn';
+    if (friend.status === 'accepted') return t('screens.addFriend.alreadyFriends');
     if (friend.status === 'pending') {
-      return friend.is_requester ? 'Forespørsel sendt' : 'Venter på svar';
+      return friend.is_requester ? t('screens.addFriend.requestSent') : t('screens.addFriend.waitingForResponse');
     }
-    return 'Legg til venn';
+    return t('screens.addFriend.sendRequest');
   };
 
   const getButtonStyle = (friend: Friend) => {
@@ -128,18 +130,18 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>{t('common.backArrow')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
           <Text style={styles.loginPrompt}>
-            Du må logge inn for å legge til venner
+            {t('screens.addFriend.loginPrompt')}
           </Text>
           <TouchableOpacity
             style={styles.loginButton}
             onPress={() => navigation.navigate('Login')}
           >
-            <Text style={styles.loginButtonText}>Logg inn</Text>
+            <Text style={styles.loginButtonText}>{t('screens.login.loginButton')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -150,16 +152,16 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Legg til venn</Text>
+        <Text style={styles.headerTitle}>{t('screens.addFriend.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Søk etter brukernavn eller e-post..."
+          placeholder={t('screens.addFriend.search')}
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}
@@ -174,7 +176,7 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
           {searching ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.searchButtonText}>Søk</Text>
+            <Text style={styles.searchButtonText}>{t('screens.addFriend.searchButton')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -183,13 +185,13 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
         {searchResults.length === 0 && searchQuery.trim().length >= 2 && !searching ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              Ingen brukere funnet med "{searchQuery}"
+              {t('screens.addFriend.noResults')} "{searchQuery}"
             </Text>
           </View>
         ) : searchResults.length === 0 && !searching ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>
-              Skriv inn et brukernavn for å søke
+              {t('screens.addFriend.searchPrompt')}
             </Text>
           </View>
         ) : (

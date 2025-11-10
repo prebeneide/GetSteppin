@@ -1,9 +1,20 @@
 import { supabase } from '../lib/supabase';
+import { createLikeNotification, createCommentNotification, createReplyNotification, createCommentLikeNotification } from './notificationService';
 import { Walk } from './walkService';
 
 export interface PostImage {
   url: string;
   index: number;
+}
+
+export interface PostDisplaySettings {
+  show_start_time?: boolean;
+  show_end_time?: boolean;
+  show_date?: boolean;
+  show_max_speed?: boolean;
+  show_avg_speed?: boolean;
+  show_duration?: boolean;
+  is_public?: boolean;
 }
 
 export interface Post {
@@ -15,6 +26,7 @@ export interface Post {
   images: PostImage[] | null; // New: array of images
   primary_image_index: number; // Index of primary image to display first
   map_position: number; // Position in media slider where map appears (-1 = end, 0+ = after image index)
+  display_settings?: PostDisplaySettings | null; // Visibility settings for post information
   created_at: string;
   updated_at: string;
 }
@@ -67,10 +79,13 @@ export interface PostComment {
   post_id: string;
   user_id: string;
   content: string;
+  parent_comment_id: string | null;
   created_at: string;
   updated_at: string;
   username: string;
   avatar_url: string | null;
+  likes_count?: number;
+  is_liked?: boolean;
 }
 
 /**
@@ -83,7 +98,8 @@ export const createPostFromWalk = async (
   content: string | null = null,
   images: Array<{ url: string; index: number }> | null = null,
   primaryImageIndex: number = 0,
-  mapPosition: number = -1 // -1 = end, 0+ = after image index
+  mapPosition: number = -1, // -1 = end, 0+ = after image index
+  displaySettings: PostDisplaySettings | null = null // Visibility settings
 ): Promise<{ data: Post | null; error: any }> => {
   try {
     // Check if post already exists for this walk
@@ -116,6 +132,11 @@ export const createPostFromWalk = async (
         updateData.image_url = legacyImageUrl;
       } else {
         updateData.map_position = mapPosition;
+      }
+      
+      // Update display settings if provided
+      if (displaySettings) {
+        updateData.display_settings = displaySettings;
       }
 
       const { data, error } = await supabase
@@ -153,6 +174,22 @@ export const createPostFromWalk = async (
       insertData.image_url = legacyImageUrl; // Backward compatibility
     } else {
       insertData.map_position = mapPosition;
+    }
+    
+    // Add display settings (default to all visible if not provided)
+    if (displaySettings) {
+      insertData.display_settings = displaySettings;
+    } else {
+      // Default: all visible, public
+      insertData.display_settings = {
+        show_start_time: true,
+        show_end_time: true,
+        show_date: true,
+        show_max_speed: true,
+        show_avg_speed: true,
+        show_duration: true,
+        is_public: true,
+      };
     }
 
     const { data, error } = await supabase
@@ -203,51 +240,41 @@ export const getFeedPosts = async (
 
     if (friendError) {
       console.error('Error fetching friend posts:', friendError);
-      // Fallback to popular posts
-      return getPopularPosts(limit, offset);
+      // Return empty array instead of falling back to popular posts
+      return { data: [], error: friendError };
     }
 
     // Transform RPC response to PostWithDetails format
-    const transformedPosts: PostWithDetails[] = (friendPosts || []).map((post: any) => ({
-      id: post.id,
-      user_id: post.user_id,
-      walk_id: post.walk_id,
-      content: post.content,
-      image_url: post.image_url || null,
-      images: post.images || null,
-      primary_image_index: post.primary_image_index || 0,
-      map_position: post.map_position !== undefined ? post.map_position : -1,
-      created_at: post.created_at,
-      updated_at: post.updated_at,
-      username: post.username || 'Ukjent',
-      avatar_url: post.avatar_url || null,
-      walk: post.walk || null,
-      likes_count: post.likes_count || 0,
-      comments_count: post.comments_count || 0,
-      is_liked: post.is_liked || false,
-      has_user_liked: post.is_liked || false,
-    }));
+    // Filter out private posts (is_public === false) for other users
+    const transformedPosts: PostWithDetails[] = (friendPosts || [])
+      .filter((post: any) => {
+        // Only show public posts (is_public !== false) or posts from the current user
+        const isPublic = post.display_settings?.is_public !== false;
+        const isOwnPost = post.user_id === userId;
+        return isPublic || isOwnPost;
+      })
+      .map((post: any) => ({
+        id: post.id,
+        user_id: post.user_id,
+        walk_id: post.walk_id,
+        content: post.content,
+        image_url: post.image_url || null,
+        images: post.images || null,
+        primary_image_index: post.primary_image_index || 0,
+        map_position: post.map_position !== undefined ? post.map_position : -1,
+        display_settings: post.display_settings || null,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        username: post.username || 'Ukjent',
+        avatar_url: post.avatar_url || null,
+        walk: post.walk || null,
+        likes_count: post.likes_count || 0,
+        comments_count: post.comments_count || 0,
+        is_liked: post.is_liked || false,
+        has_user_liked: post.is_liked || false,
+      }));
 
-    // If not enough posts, add popular posts
-    if (transformedPosts.length < limit) {
-      const popularPostsResult = await getPopularPosts(
-        limit - transformedPosts.length,
-        offset
-      );
-      
-      const combined = [
-        ...transformedPosts,
-        ...(popularPostsResult.data || []),
-      ];
-
-      // Remove duplicates
-      const unique = combined.filter((post, index, self) =>
-        index === self.findIndex(p => p.id === post.id)
-      );
-
-      return { data: unique.slice(0, limit) as PostWithDetails[], error: null };
-    }
-
+    // Only return friend posts - no popular posts
     return { data: transformedPosts, error: null };
   } catch (err) {
     console.error('Error in getFeedPosts:', err);
@@ -282,25 +309,32 @@ export const getPopularPosts = async (
     }
 
     // Transform data
-    const posts: PostWithDetails[] = (data || []).map((post: any) => ({
-      id: post.id,
-      user_id: post.user_id,
-      walk_id: post.walk_id,
-      content: post.content,
-      image_url: post.image_url || null,
-      images: post.images || null,
-      primary_image_index: post.primary_image_index || 0,
-      map_position: post.map_position !== undefined ? post.map_position : -1,
-      created_at: post.created_at,
-      updated_at: post.updated_at,
-      username: post.user?.username || 'Ukjent',
-      avatar_url: post.user?.avatar_url || null,
-      walk: post.walk || null,
-      likes_count: post.likes?.length || 0,
-      comments_count: post.comments?.length || 0,
-      is_liked: false, // Will be set by checking user likes
-      has_user_liked: false,
-    }));
+    // Filter out private posts (is_public === false)
+    const posts: PostWithDetails[] = (data || [])
+      .filter((post: any) => {
+        // Only show public posts (is_public !== false)
+        return post.display_settings?.is_public !== false;
+      })
+      .map((post: any) => ({
+        id: post.id,
+        user_id: post.user_id,
+        walk_id: post.walk_id,
+        content: post.content,
+        image_url: post.image_url || null,
+        images: post.images || null,
+        primary_image_index: post.primary_image_index || 0,
+        map_position: post.map_position !== undefined ? post.map_position : -1,
+        display_settings: post.display_settings || null,
+        created_at: post.created_at,
+        updated_at: post.updated_at,
+        username: post.user?.username || 'Ukjent',
+        avatar_url: post.user?.avatar_url || null,
+        walk: post.walk || null,
+        likes_count: post.likes?.length || 0,
+        comments_count: post.comments?.length || 0,
+        is_liked: false, // Will be set by checking user likes
+        has_user_liked: false,
+      }));
 
     return { data: posts, error: null };
   } catch (err) {
@@ -399,6 +433,22 @@ export const likePost = async (
       return { data: null, error };
     }
 
+    // Create notification for the post owner
+    try {
+      const { data: postData } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+      
+      if (postData && postData.user_id) {
+        await createLikeNotification(postId, postData.user_id, userId);
+      }
+    } catch (notifErr) {
+      // Don't fail the like if notification creation fails
+      console.error('Error creating like notification:', notifErr);
+    }
+
     return { data: data as PostLike, error: null };
   } catch (err) {
     console.error('Error in likePost:', err);
@@ -433,10 +483,49 @@ export const unlikePost = async (
 };
 
 /**
+ * Get all users who liked a post
+ */
+export const getPostLikes = async (
+  postId: string
+): Promise<{ data: Array<{ user_id: string; username: string; avatar_url: string | null; full_name: string | null; created_at: string }>; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('post_likes')
+      .select(`
+        user_id,
+        created_at,
+        user:user_profiles!post_likes_user_id_fkey(username, avatar_url, full_name)
+      `)
+      .eq('post_id', postId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching post likes:', error);
+      return { data: [], error };
+    }
+
+    // Transform data
+    const likes = (data || []).map((like: any) => ({
+      user_id: like.user_id,
+      username: like.user?.username || 'Ukjent',
+      avatar_url: like.user?.avatar_url || null,
+      full_name: like.user?.full_name || null,
+      created_at: like.created_at,
+    }));
+
+    return { data: likes, error: null };
+  } catch (err) {
+    console.error('Error in getPostLikes:', err);
+    return { data: [], error: err };
+  }
+};
+
+/**
  * Get comments for a post
  */
 export const getPostComments = async (
   postId: string,
+  userId: string | null = null,
   limit: number = 50
 ): Promise<{ data: PostComment[]; error: any }> => {
   try {
@@ -455,16 +544,52 @@ export const getPostComments = async (
       return { data: [], error };
     }
 
+    // Get likes count and user's like status for each comment
+    const commentIds = (data || []).map((c: any) => c.id);
+    let userLikes: Set<string> = new Set();
+    
+    if (userId && commentIds.length > 0) {
+      const { data: likesData } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .eq('user_id', userId)
+        .in('comment_id', commentIds);
+      
+      if (likesData) {
+        userLikes = new Set(likesData.map((l: any) => l.comment_id));
+      }
+    }
+
+    // Get actual likes count for each comment
+    const likesCounts: Map<string, number> = new Map();
+    if (commentIds.length > 0) {
+      const { data: likesCountData, error: countError } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .in('comment_id', commentIds);
+      
+      // Count likes per comment
+      if (likesCountData && !countError) {
+        likesCountData.forEach((item: any) => {
+          const count = likesCounts.get(item.comment_id) || 0;
+          likesCounts.set(item.comment_id, count + 1);
+        });
+      }
+    }
+
     // Transform data
     const comments: PostComment[] = (data || []).map((comment: any) => ({
       id: comment.id,
       post_id: comment.post_id,
       user_id: comment.user_id,
       content: comment.content,
+      parent_comment_id: comment.parent_comment_id || null,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
       username: comment.user?.username || 'Ukjent',
       avatar_url: comment.user?.avatar_url || null,
+      likes_count: likesCounts.get(comment.id) || 0,
+      is_liked: userLikes.has(comment.id),
     }));
 
     return { data: comments, error: null };
@@ -548,12 +673,13 @@ export const deletePost = async (
 };
 
 /**
- * Add a comment to a post
+ * Add a comment to a post (or a reply to a comment)
  */
 export const addComment = async (
   postId: string,
   userId: string,
-  content: string
+  content: string,
+  parentCommentId?: string | null
 ): Promise<{ data: PostComment | null; error: any }> => {
   try {
     if (!content.trim()) {
@@ -566,6 +692,7 @@ export const addComment = async (
         post_id: postId,
         user_id: userId,
         content: content.trim(),
+        parent_comment_id: parentCommentId || null,
       })
       .select(`
         *,
@@ -584,16 +711,169 @@ export const addComment = async (
       post_id: data.post_id,
       user_id: data.user_id,
       content: data.content,
+      parent_comment_id: data.parent_comment_id || null,
       created_at: data.created_at,
       updated_at: data.updated_at,
       username: data.user?.username || 'Ukjent',
       avatar_url: data.user?.avatar_url || null,
     };
 
+    // Create notification
+    try {
+      const { data: postData } = await supabase
+        .from('posts')
+        .select('user_id')
+        .eq('id', postId)
+        .single();
+      
+      if (postData && postData.user_id) {
+        if (parentCommentId) {
+          // This is a reply - notify the comment owner
+          // Get the parent comment to find its owner
+          const { data: parentComment } = await supabase
+            .from('post_comments')
+            .select('user_id')
+            .eq('id', parentCommentId)
+            .single();
+          
+          if (parentComment && parentComment.user_id && parentComment.user_id !== userId) {
+            await createReplyNotification(postId, parentComment.user_id, userId, parentCommentId);
+          }
+        } else {
+          // This is a top-level comment - notify the post owner
+          if (postData.user_id !== userId) {
+            await createCommentNotification(postId, postData.user_id, userId);
+          }
+        }
+      }
+    } catch (notifErr) {
+      // Don't fail the comment if notification creation fails
+      console.error('Error creating comment notification:', notifErr);
+    }
+
     return { data: comment, error: null };
   } catch (err) {
     console.error('Error in addComment:', err);
     return { data: null, error: err };
+  }
+};
+
+/**
+ * Like a comment
+ */
+export const likeComment = async (
+  commentId: string,
+  userId: string
+): Promise<{ data: any; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('comment_likes')
+      .insert({
+        comment_id: commentId,
+        user_id: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // If error is due to duplicate like, return success
+      if (error.code === '23505') {
+        return { data: null, error: null };
+      }
+      console.error('Error liking comment:', error);
+      return { data: null, error };
+    }
+
+    // Create notification for the comment owner
+    try {
+      // Get the comment to find its owner and post_id
+      const { data: commentData } = await supabase
+        .from('post_comments')
+        .select('user_id, post_id')
+        .eq('id', commentId)
+        .single();
+      
+      if (commentData && commentData.user_id && commentData.post_id) {
+        await createCommentLikeNotification(
+          commentData.post_id,
+          commentData.user_id,
+          userId,
+          commentId
+        );
+      }
+    } catch (notifErr) {
+      // Don't fail the like if notification creation fails
+      console.error('Error creating comment like notification:', notifErr);
+    }
+
+    return { data, error: null };
+  } catch (err) {
+    console.error('Error in likeComment:', err);
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Unlike a comment
+ */
+export const unlikeComment = async (
+  commentId: string,
+  userId: string
+): Promise<{ error: any }> => {
+  try {
+    const { error } = await supabase
+      .from('comment_likes')
+      .delete()
+      .eq('comment_id', commentId)
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error unliking comment:', error);
+      return { error };
+    }
+
+    return { error: null };
+  } catch (err) {
+    console.error('Error in unlikeComment:', err);
+    return { error: err };
+  }
+};
+
+/**
+ * Get all users who liked a comment
+ */
+export const getCommentLikes = async (
+  commentId: string
+): Promise<{ data: Array<{ user_id: string; username: string; avatar_url: string | null; full_name: string | null; created_at: string }>; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('comment_likes')
+      .select(`
+        user_id,
+        created_at,
+        user:user_profiles!comment_likes_user_id_fkey(username, avatar_url, full_name)
+      `)
+      .eq('comment_id', commentId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching comment likes:', error);
+      return { data: [], error };
+    }
+
+    // Transform data
+    const likes = (data || []).map((like: any) => ({
+      user_id: like.user_id,
+      username: like.user?.username || 'Ukjent',
+      avatar_url: like.user?.avatar_url || null,
+      full_name: like.user?.full_name || null,
+      created_at: like.created_at,
+    }));
+
+    return { data: likes, error: null };
+  } catch (err) {
+    console.error('Error in getCommentLikes:', err);
+    return { data: [], error: err };
   }
 };
 

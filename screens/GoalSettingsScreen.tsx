@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface GoalSettingsScreenProps {
   navigation: any;
@@ -21,6 +22,7 @@ interface GoalSettingsScreenProps {
 
 export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [goal, setGoal] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -82,13 +84,13 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
   const validateGoal = (value: string): string => {
     const num = parseInt(value, 10);
     if (isNaN(num)) {
-      return 'Vennligst skriv inn et tall';
+      return t('screens.goalSettings.pleaseEnterNumber');
     }
     if (num < 1000) {
-      return 'Daglig mål må være minst 1000 skritt';
+      return t('screens.goalSettings.minimum1000');
     }
     if (num > 100000) {
-      return 'Daglig mål kan ikke være mer enn 100,000 skritt';
+      return t('screens.goalSettings.maximum100000');
     }
     return '';
   };
@@ -123,7 +125,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
 
         if (updateError) {
           console.error('Error updating goal:', updateError);
-          showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+          showAlert(t('common.error'), t('screens.goalSettings.couldNotSave'));
           setSaving(false);
           return;
         }
@@ -150,7 +152,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
 
           if (updateError) {
             console.error('Error updating device goal:', updateError);
-            showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+            showAlert(t('common.error'), t('screens.goalSettings.couldNotSave'));
             setSaving(false);
             return;
           }
@@ -165,7 +167,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
 
           if (insertError) {
             console.error('Error inserting device goal:', insertError);
-            showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+            showAlert(t('common.error'), t('screens.goalSettings.couldNotSave'));
             setSaving(false);
             return;
           }
@@ -173,10 +175,10 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
       }
 
       // Success - show success message
-      showAlert('Suksess', 'Daglig mål er oppdatert!');
+      showAlert(t('common.success'), t('screens.goalSettings.goalUpdated'));
     } catch (err: any) {
       console.error('Error saving goal:', err);
-      showAlert('Feil', 'Noe gikk galt. Prøv igjen senere.');
+      showAlert(t('common.error'), t('screens.goalSettings.somethingWentWrong'));
     } finally {
       setSaving(false);
     }
@@ -193,7 +195,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -203,32 +205,32 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Daglig mål</Text>
+            <Text style={styles.title}>{t('screens.goalSettings.title')}</Text>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Sett ditt daglige mål</Text>
+              <Text style={styles.sectionTitle}>{t('screens.goalSettings.setYourGoal')}</Text>
               <Text style={styles.sectionDescription}>
-                Hvor mange skritt ønsker du å ta hver dag?
+                {t('screens.goalSettings.howManySteps')}
               </Text>
 
               {loading ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color="#1ED760" />
-                  <Text style={styles.loadingText}>Laster...</Text>
+                  <Text style={styles.loadingText}>{t('common.loading')}</Text>
                 </View>
               ) : (
                 <>
                   <View style={styles.inputContainer}>
                     <TextInput
                       style={[styles.input, error && styles.inputError]}
-                      placeholder="Eks: 10000"
+                      placeholder={t('screens.goalSettings.example')}
                       value={goal}
                       onChangeText={handleGoalChange}
                       keyboardType="number-pad"
                       maxLength={6}
                       editable={!saving}
                     />
-                    <Text style={styles.inputLabel}>skritt per dag</Text>
+                    <Text style={styles.inputLabel}>{t('screens.goalSettings.stepsPerDay')}</Text>
                   </View>
 
                   {error ? (
@@ -236,7 +238,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
                   ) : null}
 
                   <View style={styles.suggestionsContainer}>
-                    <Text style={styles.suggestionsLabel}>Raskt valg:</Text>
+                    <Text style={styles.suggestionsLabel}>{t('screens.goalSettings.quickSelection')}:</Text>
                     <View style={styles.suggestions}>
                       {[5000, 10000, 15000, 20000].map((suggestion) => (
                         <TouchableOpacity
@@ -272,10 +274,10 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
                     {saving ? (
                       <View style={styles.buttonLoading}>
                         <ActivityIndicator size="small" color="#fff" />
-                        <Text style={styles.saveButtonText}>Lagrer...</Text>
+                        <Text style={styles.saveButtonText}>{t('screens.goalSettings.saving')}</Text>
                       </View>
                     ) : (
-                      <Text style={styles.saveButtonText}>Lagre mål</Text>
+                      <Text style={styles.saveButtonText}>{t('screens.goalSettings.saveGoal')}</Text>
                     )}
                   </TouchableOpacity>
                 </>

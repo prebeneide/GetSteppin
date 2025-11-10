@@ -138,7 +138,7 @@ export const useWalkTracker = () => {
           timeInterval: LOCATION_UPDATE_INTERVAL,
           distanceInterval: 10,
           foregroundService: {
-            notificationTitle: 'Steppin tracker turer',
+            notificationTitle: 'GetSteppin tracker turer',
             notificationBody: 'Spore din tur...',
             notificationColor: '#1ED760',
           },

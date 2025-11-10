@@ -22,8 +22,19 @@
         "NSCameraUsageDescription": "Appen trenger tilgang til kamera for å ta profilbilde.",
         "NSLocationWhenInUseUsageDescription": "Appen trenger tilgang til din lokasjon for å spore turer og vise dem på kart.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Appen trenger tilgang til din lokasjon i bakgrunnen for å spore turer automatisk.",
-        "NSLocationAlwaysUsageDescription": "Appen trenger tilgang til din lokasjon i bakgrunnen for å spore turer automatisk."
-      }
+        "NSLocationAlwaysUsageDescription": "Appen trenger tilgang til din lokasjon i bakgrunnen for å spore turer automatisk.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "plugins": [
+        [
+          "expo-notifications",
+          {
+            "icon": "./assets/icon.png",
+            "color": "#1ED760",
+            "sounds": []
+          }
+        ]
+      ]
     },
     "android": {
       "package": "com.yourname.steppin",
@@ -38,11 +49,19 @@
         "ACTIVITY_RECOGNITION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION"
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "209447ea-d2c2-47f0-bfd4-e5c351a8560e"
+      }
+    },
+    "owner": "euphoriaboy"
   }
 }

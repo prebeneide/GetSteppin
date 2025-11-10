@@ -1,7 +1,7 @@
-# Storage Setup Guide - Post Images
+# Storage Setup Guide - Post Images and Message Images
 
 ## Overview
-To enable image uploads for posts, you need to create a storage bucket in Supabase and set up the necessary policies.
+To enable image uploads for posts and messages, you need to create a storage bucket in Supabase and set up the necessary policies. Both post images and message images use the same `posts` bucket but in different folders.
 
 ## Step-by-Step Instructions
 
@@ -52,8 +52,13 @@ After creating the bucket, you need to add policies for access control.
      ```
      bucket_id = 'posts' AND
      auth.role() = 'authenticated' AND
-     (storage.foldername(name))[1] = 'posts'
+     (
+       (storage.foldername(name))[1] = 'posts' OR
+       (storage.foldername(name))[1] = 'messages'
+     )
      ```
+     - **Note**: Dette tillater opplasting til både `posts/` og `messages/` mapper
+     - For meldingsbilder: brukere kan bare laste opp til sin egen `messages/{userId}/` mappe
 4. Click **"Review"** then **"Save policy"**
 
 #### Policy 3: Update Images (UPDATE)
@@ -114,8 +119,9 @@ After setting up the bucket and policies:
 
 ### Upload fails:
 - Verify the INSERT policy is configured
-- Check that the folder structure matches: `posts/[user_id]/...` or `posts/[post_id]/...`
+- Check that the folder structure matches: `posts/[user_id]/...`, `posts/[post_id]/...`, or `messages/[user_id]/...`
 - Make sure you're logged in (authenticated user)
+- If uploading message images, ensure the INSERT policy allows `messages/` folder (see Policy 2 above)
 
 ## Notes
 

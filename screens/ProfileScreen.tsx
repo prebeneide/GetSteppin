@@ -16,6 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import OnlineIndicator from '../components/OnlineIndicator';
+import { useTranslation } from '../lib/i18n';
 
 interface ProfileScreenProps {
   navigation: any;
@@ -32,6 +33,7 @@ interface UserProfile {
 
 export default function ProfileScreen({ navigation }: ProfileScreenProps) {
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -103,7 +105,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Tillatelse nødvendig', 'Vi trenger tillatelse til å hente bilder fra galleriet.');
+        Alert.alert(t('common.permissionRequired'), t('common.imagePermissionMessage'));
         return;
       }
 
@@ -121,7 +123,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Feil', 'Kunne ikke laste opp bilde. Prøv igjen.');
+      Alert.alert(t('common.error'), t('common.error'));
     }
   };
 
@@ -213,10 +215,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         if (uploadError) {
           console.error('Error uploading image:', uploadError);
-          const errorMessage = uploadError.message || 'Ukjent feil';
+          const errorMessage = uploadError.message || t('screens.profile.unknownError');
           Alert.alert(
-            'Feil ved opplasting', 
-            `Kunne ikke laste opp bilde: ${errorMessage}\n\nSjekk at "avatars" bucket eksisterer i Supabase Storage.`
+            t('common.error'), 
+            `${t('common.error')}: ${errorMessage}\n\n${t('screens.profile.checkAvatarsBucket')}`
           );
           return;
         }
@@ -238,7 +240,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         if (updateError) {
           console.error('Error updating profile:', updateError);
-          Alert.alert('Feil', 'Kunne ikke oppdatere profil.');
+          Alert.alert(t('common.error'), t('common.error'));
         } else {
           // Reload profile for å oppdatere UI med nytt bilde
           await loadProfile();
@@ -281,10 +283,10 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         if (uploadError) {
           console.error('Error uploading image:', uploadError);
-          const errorMessage = uploadError.message || 'Ukjent feil';
+          const errorMessage = uploadError.message || t('screens.profile.unknownError');
           Alert.alert(
-            'Feil ved opplasting', 
-            `Kunne ikke laste opp bilde: ${errorMessage}\n\nSjekk at "avatars" bucket eksisterer i Supabase Storage.`
+            t('common.error'), 
+            `${t('common.error')}: ${errorMessage}\n\n${t('screens.profile.checkAvatarsBucket')}`
           );
           return;
         }
@@ -313,7 +315,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           if (updateError) {
             console.error('Error updating device settings:', updateError);
-            Alert.alert('Feil', 'Kunne ikke oppdatere innstillinger.');
+            Alert.alert(t('common.error'), t('common.error'));
           } else {
             // Reload profile for å oppdatere UI med nytt bilde
             await loadProfile();
@@ -328,7 +330,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
           if (insertError) {
             console.error('Error inserting device settings:', insertError);
-            Alert.alert('Feil', 'Kunne ikke lagre innstillinger.');
+            Alert.alert(t('common.error'), t('common.error'));
           } else {
             await loadProfile();
           }
@@ -336,7 +338,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      Alert.alert('Feil', 'Kunne ikke laste opp bilde. Prøv igjen.');
+      Alert.alert(t('common.error'), t('common.error'));
     } finally {
       setUploading(false);
     }
@@ -354,7 +356,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
       if (error) {
         console.error('Error saving bio:', error);
-        Alert.alert('Feil', 'Kunne ikke lagre bio. Prøv igjen senere.');
+        Alert.alert(t('common.error'), t('common.error'));
       } else {
         // Update local profile state
         setProfile({ ...profile!, bio: bio.trim() || null });
@@ -362,7 +364,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       }
     } catch (err) {
       console.error('Error saving bio:', err);
-      Alert.alert('Feil', 'Noe gikk galt. Prøv igjen senere.');
+      Alert.alert(t('common.error'), t('common.error'));
     } finally {
       setSavingBio(false);
     }
@@ -376,7 +378,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -393,12 +395,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>Min side</Text>
+        <Text style={styles.title}>{t('screens.profile.title')}</Text>
 
         {/* Profile Picture Section */}
         <View style={styles.avatarSection}>
@@ -440,7 +442,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             disabled={uploading}
           >
             <Text style={styles.changePhotoButtonText}>
-              {uploading ? 'Laster opp...' : (user && profile?.avatar_url) || anonymousAvatarUrl ? 'Endre bilde' : 'Last opp bilde'}
+              {uploading ? t('screens.profile.uploading') : (user && profile?.avatar_url) || anonymousAvatarUrl ? t('screens.profile.changePhoto') : t('screens.profile.uploadPhoto')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -448,53 +450,53 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         {/* User Info Section */}
         {user && profile ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Brukerinformasjon</Text>
+            <Text style={styles.sectionTitle}>{t('screens.profile.userInfo')}</Text>
             
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Brukernavn:</Text>
-              <Text style={styles.infoValue}>{profile.username || 'Ikke satt'}</Text>
+              <Text style={styles.infoLabel}>{t('screens.profile.username')}:</Text>
+              <Text style={styles.infoValue}>{profile.username || t('screens.profile.notSet')}</Text>
             </View>
 
             {profile.full_name && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Fullt navn:</Text>
+                <Text style={styles.infoLabel}>{t('screens.profile.fullName')}:</Text>
                 <Text style={styles.infoValue}>{profile.full_name}</Text>
               </View>
             )}
 
             {profile.email && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>E-post:</Text>
+                <Text style={styles.infoLabel}>{t('screens.profile.email')}:</Text>
                 <Text style={styles.infoValue}>{profile.email}</Text>
               </View>
             )}
 
             {profile.daily_step_goal && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Daglig mål:</Text>
+                <Text style={styles.infoLabel}>{t('screens.profile.dailyGoal')}:</Text>
                 <Text style={styles.infoValue}>
-                  {profile.daily_step_goal.toLocaleString()} skritt
+                  {profile.daily_step_goal.toLocaleString()} {t('screens.home.steps')}
                 </Text>
               </View>
             )}
           </View>
         ) : isAnonymous ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Brukerinformasjon</Text>
+            <Text style={styles.sectionTitle}>{t('screens.profile.userInfo')}</Text>
             <Text style={styles.anonymousText}>
-              Du er ikke logget inn
+              {t('screens.profile.notLoggedIn')}
             </Text>
             {anonymousAvatarUrl && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Profilbilde:</Text>
-                <Text style={styles.infoValue}>Lastet opp</Text>
+                <Text style={styles.infoLabel}>{t('screens.profile.profilePicture')}:</Text>
+                <Text style={styles.infoValue}>{t('screens.profile.uploaded')}</Text>
               </View>
             )}
             {anonymousGoal && (
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Daglig mål:</Text>
+                <Text style={styles.infoLabel}>{t('screens.profile.dailyGoal')}:</Text>
                 <Text style={styles.infoValue}>
-                  {anonymousGoal.toLocaleString()} skritt
+                  {anonymousGoal.toLocaleString()} {t('screens.home.steps')}
                 </Text>
               </View>
             )}
@@ -502,7 +504,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               style={styles.loginButton}
               onPress={() => navigation.navigate('Login')}
             >
-              <Text style={styles.loginButtonText}>Logg inn</Text>
+              <Text style={styles.loginButtonText}>{t('screens.login.loginButton')}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -511,13 +513,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         {user && profile && (
           <View style={styles.section}>
             <View style={styles.bioHeader}>
-              <Text style={styles.sectionTitle}>Bio</Text>
+              <Text style={styles.sectionTitle}>{t('screens.profile.bio')}</Text>
               {!editingBio && (
                 <TouchableOpacity
                   style={styles.editButton}
                   onPress={() => setEditingBio(true)}
                 >
-                  <Text style={styles.editButtonText}>Rediger</Text>
+                  <Text style={styles.editButtonText}>{t('screens.profile.edit')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -526,7 +528,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               <View style={styles.bioEditContainer}>
                 <TextInput
                   style={styles.bioInput}
-                  placeholder="Skriv en kort beskrivelse om deg selv..."
+                  placeholder={t('screens.profile.bioPlaceholder')}
                   value={bio}
                   onChangeText={setBio}
                   multiline
@@ -536,7 +538,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   textAlignVertical="top"
                 />
                 <Text style={styles.bioCharCount}>
-                  {bio.length}/200 tegn
+                  {bio.length}/200 {t('screens.profile.charCount')}
                 </Text>
                 <View style={styles.bioButtonRow}>
                   <TouchableOpacity
@@ -547,7 +549,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     }}
                     disabled={savingBio}
                   >
-                    <Text style={styles.bioCancelButtonText}>Avbryt</Text>
+                    <Text style={styles.bioCancelButtonText}>{t('screens.profile.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
@@ -561,7 +563,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                     {savingBio ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={styles.bioSaveButtonText}>Lagre</Text>
+                      <Text style={styles.bioSaveButtonText}>{t('screens.profile.save')}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -572,7 +574,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
                   <Text style={styles.bioText}>{profile.bio}</Text>
                 ) : (
                   <Text style={styles.bioPlaceholder}>
-                    Ingen bio satt. Trykk på "Rediger" for å legge til en bio.
+                    {t('screens.profile.bioEmpty')}
                   </Text>
                 )}
               </View>
@@ -582,13 +584,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
 
         {/* Settings Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Innstillinger</Text>
+          <Text style={styles.sectionTitle}>{t('settings.title')}</Text>
           
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Text style={styles.settingsButtonText}>⚙️ Innstillinger</Text>
+            <Text style={styles.settingsButtonText}>⚙️ {t('settings.title')}</Text>
             <Text style={styles.settingsButtonArrow}>→</Text>
           </TouchableOpacity>
         </View>
@@ -597,7 +599,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         {user && (
           <View style={styles.section}>
             <TouchableOpacity style={styles.logoutButton} onPress={signOut}>
-              <Text style={styles.logoutButtonText}>Logg ut</Text>
+              <Text style={styles.logoutButtonText}>{t('screens.profile.logout')}</Text>
             </TouchableOpacity>
           </View>
         )}

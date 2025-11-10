@@ -172,6 +172,81 @@ export const uploadPostImages = async (
 };
 
 /**
+ * Upload a single image for a chat message
+ */
+export const uploadMessageImage = async (
+  imageUri: string,
+  userId: string
+): Promise<string> => {
+  try {
+    // Get file extension
+    const uriParts = imageUri.split('.');
+    const fileExt = uriParts[uriParts.length - 1]?.toLowerCase() || 'jpg';
+    
+    // Determine content type
+    const contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+
+    // Load image as ArrayBuffer (using XMLHttpRequest for React Native compatibility)
+    const loadImageAsArrayBuffer = async (uri: string): Promise<ArrayBuffer> => {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', uri, true);
+        xhr.responseType = 'arraybuffer';
+        
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error(`Failed to load image: ${xhr.status}`));
+          }
+        };
+        
+        xhr.onerror = () => reject(new Error('Network error loading image'));
+        xhr.send();
+      });
+    };
+
+    const imageData = await loadImageAsArrayBuffer(imageUri);
+
+    // Create unique filename
+    const timestamp = Date.now();
+    const randomId = Math.random().toString(36).substring(2, 9);
+    const fileName = `${userId}_${timestamp}_${randomId}.${fileExt}`;
+    
+    // Use messages folder structure
+    const folderPath = `messages/${userId}`;
+    const filePath = `${folderPath}/${fileName}`;
+
+    // Upload to Supabase Storage (using posts bucket, but in messages folder)
+    const { data, error: uploadError } = await supabase.storage
+      .from('posts')
+      .upload(filePath, imageData, {
+        contentType: contentType,
+        upsert: false, // Don't overwrite
+      });
+
+    if (uploadError) {
+      console.error('Error uploading message image:', uploadError);
+      throw new Error(uploadError.message || 'Kunne ikke laste opp bilde');
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('posts')
+      .getPublicUrl(filePath);
+
+    if (!urlData?.publicUrl) {
+      throw new Error('Kunne ikke hente bildets URL');
+    }
+
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('Error in uploadMessageImage:', err);
+    throw err;
+  }
+};
+
+/**
  * Delete images from Supabase Storage
  */
 export const deleteImages = async (

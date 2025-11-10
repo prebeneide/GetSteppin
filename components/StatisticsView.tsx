@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,13 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
+import { formatDistance, DistanceUnit } from '../lib/formatters';
+import { getUserPreferences } from '../lib/userPreferences';
+import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../lib/i18n';
 
 interface StepDataEntry {
   date: string;
@@ -25,6 +30,8 @@ interface StatisticsViewProps {
 type Period = 'week' | 'month' | 'year';
 
 export default function StatisticsView({ userId, isLoggedIn, showTitle = true }: StatisticsViewProps) {
+  const { user } = useAuth();
+  const { t, language } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
   const [weekOffset, setWeekOffset] = useState(0); // 0 = this week, -1 = last week, etc.
   const [monthOffset, setMonthOffset] = useState(0); // 0 = this month, -1 = last month, etc.
@@ -32,10 +39,32 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
   const [stepData, setStepData] = useState<StepDataEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
+
+  const loadPreferences = useCallback(async () => {
+    try {
+      const preferences = await getUserPreferences(user?.id || null);
+      setDistanceUnit(preferences.distance_unit);
+    } catch (err) {
+      console.error('Error loading preferences:', err);
+    }
+  }, [user]);
 
   useEffect(() => {
     loadStatistics();
-  }, [period, userId, isLoggedIn, weekOffset, monthOffset, yearOffset]);
+    loadPreferences();
+  }, [period, userId, isLoggedIn, weekOffset, monthOffset, yearOffset, loadPreferences]);
+
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
+
+  // Reload preferences when screen comes into focus (e.g., returning from Settings)
+  useFocusEffect(
+    useCallback(() => {
+      loadPreferences();
+    }, [loadPreferences])
+  );
 
   const getDateRange = (periodType: Period) => {
     const today = new Date();
@@ -117,13 +146,13 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
 
       if (fetchError) {
         console.error('Error fetching statistics:', fetchError);
-        setError('Kunne ikke laste statistikk');
+        setError(t('screens.statistics.couldNotLoad'));
       } else {
         setStepData(data || []);
       }
     } catch (err) {
       console.error('Error in loadStatistics:', err);
-      setError('Noe gikk galt');
+      setError(t('common.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -139,16 +168,17 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
     dateOnly.setHours(0, 0, 0, 0);
 
     if (dateOnly.getTime() === today.getTime()) {
-      return 'I dag';
+      return t('screens.statistics.today');
     } else if (dateOnly.getTime() === yesterday.getTime()) {
-      return 'I går';
+      return t('screens.statistics.yesterday');
     } else {
+      const locale = language === 'en' ? 'en-US' : 'nb-NO';
       if (period === 'week') {
-        return date.toLocaleDateString('nb-NO', { weekday: 'short', day: 'numeric' });
+        return date.toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
       } else if (period === 'month') {
-        return date.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+        return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
       } else {
-        return date.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' });
+        return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
       }
     }
   };
@@ -159,17 +189,19 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
     
     if (period === 'week') {
       if (weekOffset === 0) {
-        return 'Denne uken';
+        return t('screens.statistics.thisWeek');
       } else if (weekOffset === -1) {
-        return 'Forrige uke';
+        return t('screens.statistics.lastWeek');
       } else {
         // Format: "Uke 1-7 jan"
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + 6);
-        return `${startDate.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}`;
+        const locale = language === 'en' ? 'en-US' : 'nb-NO';
+        return `${startDate.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}`;
       }
     } else if (period === 'month') {
-      return startDate.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' });
+      const locale = language === 'en' ? 'en-US' : 'nb-NO';
+      return startDate.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
     } else {
       return startDate.getFullYear().toString();
     }
@@ -242,7 +274,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
       return (
         <View style={styles.noDataContainer}>
           <Text style={styles.noDataText}>
-            Ingen data for denne perioden
+            {t('screens.statistics.noDataForPeriod')}
           </Text>
         </View>
       );
@@ -260,7 +292,8 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
           {monthlyData.map((monthData) => {
             const barHeight = maxSteps > 0 ? (monthData.steps / maxSteps) * chartHeight : 0;
             const [year, month] = monthData.month.split('-');
-            const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString('nb-NO', { month: 'short' });
+                const locale = language === 'en' ? 'en-US' : 'nb-NO';
+                const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString(locale, { month: 'short' });
             
             return (
               <View key={monthData.month} style={[styles.barWrapper, styles.barWrapperMonth]}>
@@ -278,7 +311,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
                 </Text>
                 <Text style={styles.barValue}>{monthData.steps.toLocaleString()}</Text>
                 <Text style={styles.barSubValue}>
-                  {monthData.averageSteps.toLocaleString()} /dag
+                  {monthData.averageSteps.toLocaleString()} {t('screens.statistics.perDay')}
                 </Text>
               </View>
             );
@@ -335,7 +368,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        {showTitle && <Text style={styles.title}>Statistikk</Text>}
+        {showTitle && <Text style={styles.title}>{t('screens.statistics.title')}</Text>}
         
         {/* Period Navigation */}
         <View style={styles.periodNavigation}>
@@ -392,7 +425,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
             }}
           >
             <Text style={[styles.periodButtonText, period === 'week' && styles.periodButtonTextActive]}>
-              Uke
+              {t('screens.statistics.week')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -403,7 +436,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
             }}
           >
             <Text style={[styles.periodButtonText, period === 'month' && styles.periodButtonTextActive]}>
-              Måned
+              {t('screens.statistics.month')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -414,7 +447,7 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
             }}
           >
             <Text style={[styles.periodButtonText, period === 'year' && styles.periodButtonTextActive]}>
-              År
+              {t('screens.statistics.year')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -433,25 +466,25 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
           {/* Summary Cards */}
           <View style={styles.summaryContainer}>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Totalt</Text>
+              <Text style={styles.summaryLabel}>{t('screens.statistics.total')}</Text>
               <Text style={styles.summaryValue}>
                 {calculateTotal().toLocaleString()}
               </Text>
-              <Text style={styles.summaryUnit}>skritt</Text>
+              <Text style={styles.summaryUnit}>{t('screens.statistics.steps')}</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Gjennomsnitt</Text>
+              <Text style={styles.summaryLabel}>{t('screens.statistics.average')}</Text>
               <Text style={styles.summaryValue}>
                 {calculateAverage().toLocaleString()}
               </Text>
-              <Text style={styles.summaryUnit}>skritt/dag</Text>
+              <Text style={styles.summaryUnit}>{t('screens.statistics.stepsPerDay')}</Text>
             </View>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Maksimum</Text>
+              <Text style={styles.summaryLabel}>{t('screens.statistics.maximum')}</Text>
               <Text style={styles.summaryValue}>
                 {getMaxSteps().toLocaleString()}
               </Text>
-              <Text style={styles.summaryUnit}>skritt</Text>
+              <Text style={styles.summaryUnit}>{t('screens.statistics.steps')}</Text>
             </View>
           </View>
 
@@ -463,28 +496,29 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
           {/* Daily/Monthly List */}
           <View style={styles.listContainer}>
             <Text style={styles.listTitle}>
-              {period === 'year' ? 'Månedlig oversikt' : 'Daglig oversikt'}
+              {period === 'year' ? t('screens.statistics.monthlyOverview') : t('screens.statistics.dailyOverview')}
             </Text>
             {stepData.length === 0 ? (
-              <Text style={styles.noDataText}>Ingen data tilgjengelig</Text>
+              <Text style={styles.noDataText}>{t('screens.statistics.noDataAvailable')}</Text>
             ) : period === 'year' ? (
               // Show monthly data for year view
               groupByMonth().map((monthData) => {
                 const [year, month] = monthData.month.split('-');
-                const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' });
+                const locale = language === 'en' ? 'en-US' : 'nb-NO';
+                const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleDateString(locale, { month: 'long', year: 'numeric' });
                 return (
                   <View key={monthData.month} style={styles.listItem}>
                     <View style={styles.listItemLeft}>
                       <Text style={styles.listItemDate}>{monthName}</Text>
                       <Text style={styles.listItemDistance}>
-                        {(monthData.distance_meters / 1000).toFixed(2)} km totalt
+                        {formatDistance(monthData.distance_meters, distanceUnit)} {t('distance.total')}
                       </Text>
                       <Text style={styles.listItemDistance}>
-                        Gjennomsnitt: {monthData.averageSteps.toLocaleString()} skritt/dag
+                        {t('screens.statistics.average')}: {monthData.averageSteps.toLocaleString()} {t('screens.statistics.stepsPerDay')}
                       </Text>
                     </View>
                     <Text style={styles.listItemSteps}>
-                      {monthData.steps.toLocaleString()} skritt
+                      {monthData.steps.toLocaleString()} {t('screens.statistics.steps')}
                     </Text>
                   </View>
                 );
@@ -496,11 +530,11 @@ export default function StatisticsView({ userId, isLoggedIn, showTitle = true }:
                   <View style={styles.listItemLeft}>
                     <Text style={styles.listItemDate}>{formatDate(entry.date)}</Text>
                     <Text style={styles.listItemDistance}>
-                      {(entry.distance_meters / 1000).toFixed(2)} km
+                      {formatDistance(entry.distance_meters, distanceUnit)}
                     </Text>
                   </View>
                   <Text style={styles.listItemSteps}>
-                    {entry.steps.toLocaleString()} skritt
+                    {entry.steps.toLocaleString()} {t('screens.statistics.steps')}
                   </Text>
                 </View>
               ))

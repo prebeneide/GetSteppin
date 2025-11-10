@@ -4,9 +4,12 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
+    "start:dev": "expo start --dev-client",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:ios:dev": "eas build --profile development --platform ios",
+    "build:android:dev": "eas build --profile development --platform android"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -17,11 +20,14 @@
     "@supabase/supabase-js": "^2.78.0",
     "dotenv": "^17.2.3",
     "expo": "~54.0.20",
+    "expo-dev-client": "^6.0.17",
     "expo-file-system": "~19.0.17",
     "expo-image": "^3.0.10",
     "expo-image-picker": "~17.0.8",
     "expo-location": "^19.0.7",
+    "expo-notifications": "^0.29.14",
     "expo-sensors": "~15.0.7",
+    "expo-splash-screen": "^31.0.10",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -35,6 +41,7 @@
   "devDependencies": {
     "@expo/cli": "^54.0.14",
     "@types/react": "~19.1.0",
+    "eas-cli": "^16.26.0",
     "typescript": "~5.9.2"
   },
   "private": true

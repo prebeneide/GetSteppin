@@ -8,12 +8,18 @@ import { saveStepData } from '../services/stepService';
 import { checkAllAchievements } from '../services/achievementService';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
+import { isWalkTrackingEnabled } from '../services/walkService';
+import { getUnreadNotificationsCount } from '../services/notificationService';
+import { checkAndCreateAllActivityNotifications } from '../services/activityNotificationService';
 import OnboardingScreen from './OnboardingScreen';
 import CircularProgress from '../components/CircularProgress';
 import StatisticsView from '../components/StatisticsView';
 import AchievementsView from '../components/AchievementsView';
 import FriendsStepsChart from '../components/FriendsStepsChart';
 import OnlineIndicator from '../components/OnlineIndicator';
+import { useTranslation } from '../lib/i18n';
+import { formatDistance, DistanceUnit } from '../lib/formatters';
+import { getUserPreferences } from '../lib/userPreferences';
 
 interface HomeScreenProps {
   navigation: any;
@@ -21,6 +27,7 @@ interface HomeScreenProps {
 
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, signOut } = useAuth();
+  const { t, language } = useTranslation();
   const { stepData, error: stepError } = useStepCounter();
   const walkTracker = useWalkTracker(); // Initialize walk tracking
   const [saving, setSaving] = useState(false);
@@ -29,6 +36,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [profile, setProfile] = useState<{ username: string | null; avatar_url: string | null } | null>(null);
   const [anonymousAvatarUrl, setAnonymousAvatarUrl] = useState<string | null>(null);
+  const [walkTrackingEnabled, setWalkTrackingEnabled] = useState<boolean | null>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
 
   // Save step data to Supabase periodically (for both logged in and anonymous users)
   useEffect(() => {
@@ -74,6 +84,15 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
     return () => clearInterval(interval);
   }, [user, stepData.steps, stepData.distance, dailyGoal]);
+
+  // Load walk tracking enabled status
+  useEffect(() => {
+    const loadWalkTrackingStatus = async () => {
+      const enabled = await isWalkTrackingEnabled(user?.id || null);
+      setWalkTrackingEnabled(enabled);
+    };
+    loadWalkTrackingStatus();
+  }, [user]);
 
   // Load user's daily goal from profile
   const loadGoal = async () => {
@@ -185,7 +204,75 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     loadProfile();
   }, [user]);
 
+  // Load unread notifications count
+  useEffect(() => {
+    if (!user) {
+      setUnreadNotificationsCount(0);
+      return;
+    }
+    const loadNotificationsCount = async () => {
+      try {
+        const { data, error } = await getUnreadNotificationsCount(user.id);
+        if (error) {
+          console.error('Error loading unread notifications count:', error);
+        } else {
+          setUnreadNotificationsCount(data);
+        }
+      } catch (err) {
+        console.error('Error loading unread notifications count:', err);
+      }
+    };
+    loadNotificationsCount();
+    
+    // Refresh count every 30 seconds
+    const interval = setInterval(loadNotificationsCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Check and create activity notifications when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!user) return;
+
+      const checkActivityNotifications = async () => {
+        try {
+          console.log('Checking for activity notifications...');
+          const { created, errors } = await checkAndCreateAllActivityNotifications(user.id);
+          if (created > 0) {
+            console.log(`Created ${created} activity notification(s)`);
+            // Refresh notification count after creating new ones
+            const { data } = await getUnreadNotificationsCount(user.id);
+            if (data !== undefined) {
+              setUnreadNotificationsCount(data);
+            }
+          }
+          if (errors.length > 0) {
+            console.error('Errors creating activity notifications:', errors);
+          }
+        } catch (err) {
+          console.error('Error checking activity notifications:', err);
+        }
+      };
+
+      // Small delay to avoid blocking UI
+      const timeout = setTimeout(checkActivityNotifications, 1000);
+      return () => clearTimeout(timeout);
+    }, [user])
+  );
+
+  // Load preferences function - defined outside useEffect so it can be reused
+  const loadPreferences = React.useCallback(async () => {
+    const preferences = await getUserPreferences(user?.id || null);
+    setDistanceUnit(preferences.distance_unit);
+  }, [user]);
+
+  // Load distance unit preference
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
+
   // Reload goal when screen comes into focus (e.g., returning from Settings)
+  // Also reload when language changes
   useFocusEffect(
     React.useCallback(() => {
       if (goalLoaded) {
@@ -219,8 +306,25 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   }
                 });
               }
-    }, [user, goalLoaded])
+              
+              // Reload notifications count when screen comes into focus
+              if (user) {
+                getUnreadNotificationsCount(user.id).then(({ data, error }: { data: number; error: any }) => {
+                  if (!error && data !== undefined) {
+                    setUnreadNotificationsCount(data);
+                  }
+                });
+              }
+              
+              // Reload preferences when screen comes into focus (e.g., language or distance unit changed)
+              loadPreferences();
+    }, [user, goalLoaded, language, loadPreferences])
   );
+  
+  // Reload preferences when language changes
+  useEffect(() => {
+    loadPreferences();
+  }, [language, loadPreferences]);
 
   const handleGoalUpdate = (newGoal: number) => {
     console.log('Goal updated from settings:', newGoal);
@@ -299,7 +403,23 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Velkommen til Steppin!</Text>
+        <TouchableOpacity
+          style={styles.notificationButton}
+          onPress={() => navigation.navigate('Notifications')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.notificationIconContainer}>
+            <Text style={styles.notificationIcon}>🔔</Text>
+            {unreadNotificationsCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </Text>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.title}>{t('screens.home.title')}</Text>
         <TouchableOpacity
           style={styles.profileButton}
           onPress={() => navigation.navigate('Profile')}
@@ -331,6 +451,36 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         </TouchableOpacity>
       </View>
       
+            {/* Show tracking status indicator - Always visible when user is logged in */}
+            {user && walkTrackingEnabled !== null && (
+              <>
+                {walkTracker.isTracking && (
+                  <View style={styles.trackingIndicator}>
+                    <View style={[styles.trackingDot, walkTracker.isOutsideHomeArea && styles.trackingDotActive]} />
+                    <Text style={styles.trackingText}>
+                      {walkTracker.isOutsideHomeArea && walkTracker.currentWalk
+                        ? `${t('screens.home.trackingActive')} • ${walkTracker.currentWalk.distance > 0 ? formatDistance(walkTracker.currentWalk.distance, distanceUnit) : t('screens.home.starting')}`
+                        : walkTracker.isPermissionGranted
+                        ? t('screens.home.trackingWaiting')
+                        : t('screens.home.trackingPermission')}
+                    </Text>
+                  </View>
+                )}
+                {!walkTracker.isTracking && (
+                  <View style={[styles.trackingIndicator, styles.trackingIndicatorInactive]}>
+                    <View style={[styles.trackingDot, styles.trackingDotInactive]} />
+                    <Text style={[styles.trackingText, styles.trackingTextInactive]}>
+                      {walkTrackingEnabled
+                        ? walkTracker.isPermissionGranted
+                          ? t('screens.home.trackingWaiting')
+                          : t('screens.home.trackingPermission')
+                        : t('screens.home.gpsNotActivated')}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+      
       {stepError && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{stepError}</Text>
@@ -353,43 +503,41 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                   <Text style={styles.circularProgressPercent}>
                     {progressPercent.toFixed(0)}%
                   </Text>
-                  <Text style={styles.circularProgressLabel}>fullført</Text>
+                  <Text style={styles.circularProgressLabel}>{t('screens.home.completed')}</Text>
                   <Text style={styles.circularProgressSteps}>
                     {stepData.steps.toLocaleString()} / {currentGoal.toLocaleString()}
                   </Text>
                   <Text style={styles.circularProgressRemaining}>
-                    {Math.max(0, currentGoal - stepData.steps).toLocaleString()} igjen
+                    {Math.max(0, currentGoal - stepData.steps).toLocaleString()} {t('screens.home.remaining')}
                   </Text>
                 </View>
               </CircularProgress>
               
               <View style={styles.goalInfoContainer}>
-                <Text style={styles.goalTitle}>Dagens mål</Text>
-                <Text style={styles.goalValue}>{currentGoal.toLocaleString()} skritt</Text>
+                <Text style={styles.goalTitle}>{t('screens.home.goal')}</Text>
+                <Text style={styles.goalValue}>{currentGoal.toLocaleString()} {t('screens.home.steps')}</Text>
               </View>
             </View>
           ) : (
             <>
               <Text style={styles.stepCount}>{stepData.steps.toLocaleString()}</Text>
-              <Text style={styles.stepLabel}>skritt i dag</Text>
+              <Text style={styles.stepLabel}>{t('screens.home.steps')} {t('screens.home.today')}</Text>
               
               <View style={styles.distanceContainer}>
                 <Text style={styles.distanceText}>
-                  {stepData.distance >= 1000
-                    ? `${(stepData.distance / 1000).toFixed(2)} km`
-                    : `${stepData.distance} m`}
+                  {formatDistance(stepData.distance, distanceUnit)}
                 </Text>
               </View>
 
               <View style={styles.goalContainer}>
                 <Text style={styles.noGoalText}>
-                  Du har ikke satt et daglig mål ennå
+                  {t('screens.home.noGoal')}
                 </Text>
                 <TouchableOpacity
                   style={styles.setGoalButton}
                   onPress={() => setShowOnboarding(true)}
                 >
-                  <Text style={styles.setGoalButtonText}>Sett daglig mål</Text>
+                  <Text style={styles.setGoalButtonText}>{t('screens.home.setGoal')}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -398,14 +546,14 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           {saving && (
             <View style={styles.savingContainer}>
               <ActivityIndicator size="small" color="#1ED760" />
-              <Text style={styles.savingText}>Lagrer...</Text>
+              <Text style={styles.savingText}>{t('screens.home.saving')}</Text>
             </View>
           )}
         </View>
       ) : (
         <View style={styles.content}>
           <Text style={styles.info}>
-            Starter skrittteller...
+            {t('screens.home.startingStepCounter')}
           </Text>
         </View>
       )}
@@ -432,21 +580,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               {!user && (
                 <View style={styles.loginPrompt}>
                   <Text style={styles.loginPromptText}>
-                    📱 Logg inn for å legge til venner og sammenligne skritt!
+                    📱 {t('screens.home.friendsActivity')}
                   </Text>
                   <View style={styles.loginButtons}>
                     <TouchableOpacity
                       style={[styles.loginButton, styles.loginButtonPrimary]}
                       onPress={() => navigation.navigate('Login')}
                     >
-                      <Text style={styles.loginButtonText}>Logg inn</Text>
+                      <Text style={styles.loginButtonText}>{t('screens.home.login')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.loginButton, styles.loginButtonSecondary]}
                       onPress={() => navigation.navigate('SignUp')}
                     >
                       <Text style={[styles.loginButtonText, styles.loginButtonTextSecondary]}>
-                        Opprett konto
+                        {t('screens.home.createAccount')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -473,6 +621,41 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 20,
     paddingHorizontal: 0,
+  },
+  notificationButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationIconContainer: {
+    position: 'relative',
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationIcon: {
+    fontSize: 24,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#F44336',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  notificationBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   title: {
     fontSize: 28,
@@ -832,6 +1015,47 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  trackingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginBottom: 10,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#1ED760',
+  },
+  trackingIndicatorInactive: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#FF9800',
+  },
+  trackingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1ED760',
+    marginRight: 8,
+  },
+  trackingDotActive: {
+    backgroundColor: '#1ED760',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  trackingDotInactive: {
+    backgroundColor: '#FF9800',
+  },
+  trackingText: {
+    color: '#1ED760',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  trackingTextInactive: {
+    color: '#FF9800',
   },
 });
 

@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface PasswordSettingsScreenProps {
   navigation: any;
@@ -20,6 +21,7 @@ interface PasswordSettingsScreenProps {
 
 export default function PasswordSettingsScreen({ navigation }: PasswordSettingsScreenProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,14 +48,14 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
 
   // Password validation
   const validatePassword = (value: string): string => {
-    if (!value) return 'Passord er påkrevd';
-    if (value.length < 6) return 'Passord må være minst 6 tegn';
+    if (!value) return t('screens.passwordSettings.passwordRequired');
+    if (value.length < 6) return t('screens.passwordSettings.passwordMinLength');
     return '';
   };
 
   const validatePasswordMatch = (password: string, confirm: string): string => {
-    if (!confirm) return 'Bekreft passord er påkrevd';
-    if (password !== confirm) return 'Passordene stemmer ikke overens';
+    if (!confirm) return t('screens.passwordSettings.confirmPasswordRequired');
+    if (password !== confirm) return t('screens.passwordSettings.passwordsDoNotMatch');
     return '';
   };
 
@@ -110,7 +112,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
 
   const handleChangePassword = async () => {
     if (!user) {
-      showAlert('Feil', 'Du må være innlogget for å endre passord');
+      showAlert(t('common.error'), t('screens.passwordSettings.mustBeLoggedIn'));
       return;
     }
 
@@ -141,7 +143,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
       if (!authUser?.email) {
-        showAlert('Feil', 'Kunne ikke hente brukerinformasjon');
+        showAlert(t('common.error'), t('screens.passwordSettings.couldNotGetUserInfo'));
         setChangingPassword(false);
         return;
       }
@@ -155,7 +157,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
       if (verifyError) {
         setPasswordErrors(prev => ({
           ...prev,
-          current: 'Nåværende passord er feil',
+          current: t('screens.passwordSettings.currentPasswordWrong'),
         }));
         setChangingPassword(false);
         return;
@@ -168,7 +170,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
 
       if (updateError) {
         console.error('Error updating password:', updateError);
-        showAlert('Feil', 'Kunne ikke endre passord. Prøv igjen senere.');
+        showAlert(t('common.error'), t('screens.passwordSettings.couldNotChangePassword'));
         setChangingPassword(false);
         return;
       }
@@ -179,11 +181,11 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
       setConfirmPassword('');
       setPasswordTouched({ current: false, new: false, confirm: false });
       setPasswordErrors({ current: '', new: '', confirm: '' });
-      showAlert('Suksess', 'Passord er oppdatert!');
+      showAlert(t('common.success'), t('screens.passwordSettings.passwordUpdated'));
 
     } catch (err: any) {
       console.error('Error changing password:', err);
-      showAlert('Feil', 'Noe gikk galt. Prøv igjen senere.');
+      showAlert(t('common.error'), t('common.error'));
     } finally {
       setChangingPassword(false);
     }
@@ -200,7 +202,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -210,12 +212,12 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
-            <Text style={styles.title}>Endre passord</Text>
+            <Text style={styles.title}>{t('screens.passwordSettings.title')}</Text>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Sett nytt passord</Text>
+              <Text style={styles.sectionTitle}>{t('screens.passwordSettings.setNewPassword')}</Text>
               <Text style={styles.sectionDescription}>
-                Skriv inn ditt nåværende passord og velg et nytt passord.
+                {t('screens.passwordSettings.enterCurrentAndNew')}
               </Text>
 
               <View style={styles.passwordForm}>
@@ -225,7 +227,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
                       styles.passwordInput,
                       passwordTouched.current && passwordErrors.current && styles.passwordInputError,
                     ]}
-                    placeholder="Nåværende passord"
+                    placeholder={t('screens.passwordSettings.currentPassword')}
                     value={currentPassword}
                     onChangeText={(value) => handlePasswordFieldChange('current', value)}
                     onBlur={() => handlePasswordFieldBlur('current')}
@@ -245,7 +247,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
                       styles.passwordInput,
                       passwordTouched.new && passwordErrors.new && styles.passwordInputError,
                     ]}
-                    placeholder="Nytt passord (minimum 6 tegn)"
+                    placeholder={t('screens.passwordSettings.newPassword')}
                     value={newPassword}
                     onChangeText={(value) => handlePasswordFieldChange('new', value)}
                     onBlur={() => handlePasswordFieldBlur('new')}
@@ -265,7 +267,7 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
                       styles.passwordInput,
                       passwordTouched.confirm && passwordErrors.confirm && styles.passwordInputError,
                     ]}
-                    placeholder="Bekreft nytt passord"
+                    placeholder={t('screens.passwordSettings.confirmPassword')}
                     value={confirmPassword}
                     onChangeText={(value) => handlePasswordFieldChange('confirm', value)}
                     onBlur={() => handlePasswordFieldBlur('confirm')}
@@ -291,10 +293,10 @@ export default function PasswordSettingsScreen({ navigation }: PasswordSettingsS
                   {changingPassword ? (
                     <View style={styles.buttonLoading}>
                       <ActivityIndicator size="small" color="#fff" />
-                      <Text style={styles.saveButtonText}>Endrer passord...</Text>
+                      <Text style={styles.saveButtonText}>{t('screens.passwordSettings.changing')}</Text>
                     </View>
                   ) : (
-                    <Text style={styles.saveButtonText}>Endre passord</Text>
+                    <Text style={styles.saveButtonText}>{t('screens.passwordSettings.changePassword')}</Text>
                   )}
                 </TouchableOpacity>
               </View>

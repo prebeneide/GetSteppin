@@ -16,6 +16,7 @@ import { WalkCoordinate } from '../services/walkService';
 import { getMapUrl, APP_COLORS } from '../lib/mapConfig';
 import Svg, { Polyline, Circle } from 'react-native-svg';
 import WalkMapView from './WalkMapView';
+import { useTranslation } from '../lib/i18n';
 
 interface MediaItem {
   type: 'image' | 'map';
@@ -39,6 +40,7 @@ export default function MediaGallery({
   mapPosition = -1, // -1 means map at the end, otherwise position after image index
   height = 300,
 }: MediaGalleryProps) {
+  const { t } = useTranslation();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -56,29 +58,49 @@ export default function MediaGallery({
     });
     
     // Add map if coordinates exist
-    if (coordinates && coordinates.length >= 2) {
-      const mapIndex = mapPosition === -1 
-        ? items.length // Add at end if -1
-        : Math.min(mapPosition + 1, items.length); // Add after specified image index
+    // mapPosition: -1 = end, -2 = hide, -3 = first (before primary), 0+ = after image index
+    if (coordinates && coordinates.length >= 2 && mapPosition !== -2) {
+      let mapIndex = 0;
+      
+      if (mapPosition === -3) {
+        // Map first (before everything, including primary)
+        mapIndex = 0;
+      } else if (mapPosition === -1) {
+        // Map at end
+        mapIndex = items.length;
+      } else {
+        // Map after image at index mapPosition
+        mapIndex = Math.min(mapPosition + 1, items.length);
+      }
       
       items.splice(mapIndex, 0, {
         type: 'map',
         coordinates,
         index: mapIndex,
       });
+      
+      // Update indices after map insertion
+      items.forEach((item, idx) => {
+        item.index = idx;
+      });
     }
     
     // Sort by primary image index if specified
-    if (primaryImageIndex >= 0 && primaryImageIndex < images.length && primaryImageIndex !== 0) {
+    // But if map is at position 0, primary will be at position 1
+    if (primaryImageIndex >= 0 && primaryImageIndex < images.length) {
       const primaryItem = items.find(item => item.type === 'image' && item.index === primaryImageIndex);
       if (primaryItem) {
         const primaryIdx = items.indexOf(primaryItem);
-        items.splice(primaryIdx, 1);
-        items.unshift(primaryItem);
-        // Update all indices after moving
-        items.forEach((item, idx) => {
-          item.index = idx;
-        });
+        const targetIdx = items[0]?.type === 'map' ? 1 : 0;
+        
+        if (primaryIdx !== targetIdx) {
+          items.splice(primaryIdx, 1);
+          items.splice(targetIdx, 0, primaryItem);
+          // Update all indices after moving
+          items.forEach((item, idx) => {
+            item.index = idx;
+          });
+        }
       }
     }
     
@@ -436,6 +458,8 @@ function InteractiveMapView({ coordinates, height }: InteractiveMapViewProps) {
 
   // Create interactive map HTML
   const interactiveMapHtml = useMemo(() => {
+    const startLabel = t('common.start');
+    const endLabel = t('common.end');
     return `
       <!DOCTYPE html>
       <html>
@@ -494,7 +518,7 @@ function InteractiveMapView({ coordinates, height }: InteractiveMapViewProps) {
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
               })
-            }).addTo(map).bindPopup('Start');
+            }).addTo(map).bindPopup('${startLabel}');
             
             // Add end marker (red)
             const endMarker = L.marker([${endCoord.lat}, ${endCoord.lng}], {
@@ -504,12 +528,12 @@ function InteractiveMapView({ coordinates, height }: InteractiveMapViewProps) {
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
               })
-            }).addTo(map).bindPopup('Slutt');
+            }).addTo(map).bindPopup('${endLabel}');
           </script>
         </body>
       </html>
     `;
-  }, [pathCoordinates, centerLat, centerLng, startCoord, endCoord]);
+  }, [pathCoordinates, centerLat, centerLng, startCoord, endCoord, t]);
 
   return (
     <View style={{ width: '100%', height: '100%' }}>

@@ -28,7 +28,12 @@
 --     - WITH CHECK expression:
 --       bucket_id = 'posts' AND
 --       auth.role() = 'authenticated' AND
---       (storage.foldername(name))[1] = 'posts'
+--       (
+--         (storage.foldername(name))[1] = 'posts' OR
+--         (storage.foldername(name))[1] = 'messages'
+--       )
+--     NOTE: This policy allows uploads to both posts/ and messages/ folders
+--     For messages, users can only upload to their own folder: messages/{userId}/
 --
 --   Policy 3: Update Images (UPDATE)
 --     - Policy name: "Authenticated users can update own post images"

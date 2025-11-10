@@ -9,11 +9,17 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { getFeedPosts, PostWithDetails, likePost, unlikePost } from '../services/postService';
+import { getFriends } from '../services/friendService';
 import AlertModal from '../components/AlertModal';
 import MediaGallery from '../components/MediaGallery';
+import LikesModal from '../components/LikesModal';
 import { getAllImageUrls } from '../services/postService';
+import { formatDistance, DistanceUnit } from '../lib/formatters';
+import { getUserPreferences } from '../lib/userPreferences';
+import { useTranslation } from '../lib/i18n';
 
 interface FeedScreenProps {
   navigation: any;
@@ -21,31 +27,65 @@ interface FeedScreenProps {
 
 export default function FeedScreen({ navigation }: FeedScreenProps) {
   const { user } = useAuth();
+  const { t, language } = useTranslation();
   const [posts, setPosts] = useState<PostWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
   const [likingPostId, setLikingPostId] = useState<string | null>(null);
+  const [likesModalVisible, setLikesModalVisible] = useState(false);
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
+  const [hasFriends, setHasFriends] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (user) {
       loadPosts();
+      loadPreferences();
     }
   }, [user]);
+
+  // Reload posts when screen comes into focus (e.g., after adding a comment)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadPosts();
+        loadPreferences();
+      }
+    }, [user])
+  );
+
+  const loadPreferences = async () => {
+    try {
+      const preferences = await getUserPreferences(user?.id || null);
+      setDistanceUnit(preferences.distance_unit);
+    } catch (err) {
+      console.error('Error loading preferences:', err);
+    }
+  };
 
   const loadPosts = async () => {
     if (!user) return;
     
     setLoading(true);
     try {
+      // Check if user has friends
+      const { data: friends, error: friendsError } = await getFriends(user.id);
+      if (friendsError) {
+        console.error('Error loading friends:', friendsError);
+        setHasFriends(null);
+      } else {
+        setHasFriends((friends || []).length > 0);
+      }
+
       const { data, error } = await getFeedPosts(user.id, 20, 0);
 
       if (error) throw error;
       setPosts(data || []);
     } catch (err) {
       console.error('Error loading posts:', err);
-      setAlertMessage('Kunne ikke laste innlegg');
+      setAlertMessage(t('screens.feed.couldNotLoad'));
       setAlertVisible(true);
     } finally {
       setLoading(false);
@@ -84,7 +124,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       );
     } catch (err) {
       console.error('Error liking post:', err);
-      setAlertMessage('Kunne ikke like innlegg');
+      setAlertMessage(t('screens.feed.couldNotLike'));
       setAlertVisible(true);
     } finally {
       setLikingPostId(null);
@@ -100,15 +140,16 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) {
-      return 'Nå';
+      return t('screens.feed.now');
     } else if (diffMins < 60) {
-      return `${diffMins} min siden`;
+      return `${diffMins} ${t('screens.feed.minutesAgo')}`;
     } else if (diffHours < 24) {
-      return `${diffHours} timer siden`;
+      return `${diffHours} ${t('screens.feed.hoursAgo')}`;
     } else if (diffDays < 7) {
-      return `${diffDays} dager siden`;
+      return `${diffDays} ${t('screens.feed.daysAgo')}`;
     } else {
-      return date.toLocaleDateString('no-NO', {
+      const locale = language === 'en' ? 'en-US' : 'no-NO';
+      return date.toLocaleDateString(locale, {
         day: 'numeric',
         month: 'short',
         year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
@@ -116,12 +157,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     }
   };
 
-  const formatDistance = (meters: number): string => {
-    if (meters >= 1000) {
-      return `${(meters / 1000).toFixed(2)} km`;
-    }
-    return `${meters} m`;
-  };
+  // formatDistance is now imported from lib/formatters.ts
 
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
@@ -140,11 +176,11 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Logg inn for å se feed</Text>
+          <Text style={styles.emptyText}>{t('screens.feed.loginPrompt')}</Text>
         </View>
       </View>
     );
@@ -157,9 +193,9 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Feed</Text>
+        <Text style={styles.title}>{t('screens.feed.title')}</Text>
       </View>
 
       {loading ? (
@@ -169,9 +205,15 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       ) : posts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>📰</Text>
-          <Text style={styles.emptyText}>Ingen innlegg ennå</Text>
+          <Text style={styles.emptyText}>
+            {hasFriends === false
+              ? t('screens.feed.noFriends')
+              : t('screens.feed.noPosts')}
+          </Text>
           <Text style={styles.emptySubtext}>
-            Innlegg fra venner og populære innlegg vil vises her
+            {hasFriends === false
+              ? t('screens.feed.noFriendsSubtext')
+              : t('screens.feed.noPostsSubtext')}
           </Text>
         </View>
       ) : (
@@ -183,7 +225,16 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
           }
         >
           {posts.map((post) => (
-            <View key={post.id} style={styles.postCard}>
+            <TouchableOpacity
+              key={post.id}
+              style={styles.postCard}
+              onPress={() => {
+                if (post.walk) {
+                  navigation.navigate('PostWalkDetail', { postId: post.id });
+                }
+              }}
+              activeOpacity={0.95}
+            >
               {/* Post Header */}
               <View style={styles.postHeader}>
                 <View style={styles.userInfo}>
@@ -210,11 +261,12 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
               {post.walk && (
                 <View style={styles.walkInfo}>
                   <Text style={styles.walkTitle}>
-                    👣 {formatDistance(post.walk.distance_meters)} tur
+                    👣 {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
                   </Text>
                   <Text style={styles.walkStats}>
-                    {formatDuration(post.walk.duration_minutes)} •{' '}
-                    {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} skritt`}
+                    {post.display_settings?.show_duration !== false && formatDuration(post.walk.duration_minutes)}
+                    {post.display_settings?.show_duration !== false && post.walk.steps > 0 && ' • '}
+                    {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} ${t('common.steps')}`}
                   </Text>
                 </View>
               )}
@@ -248,8 +300,18 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
               <View style={styles.postActions}>
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => handleLike(post.id, post.is_liked)}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleLike(post.id, post.is_liked);
+                  }}
                   disabled={likingPostId === post.id}
+                  onLongPress={(e) => {
+                    e.stopPropagation();
+                    if (post.likes_count > 0) {
+                      setSelectedPostId(post.id);
+                      setLikesModalVisible(true);
+                    }
+                  }}
                 >
                   <Text style={[
                     styles.actionText,
@@ -258,25 +320,59 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
                     {post.is_liked ? '❤️' : '🤍'} {post.likes_count || 0}
                   </Text>
                 </TouchableOpacity>
+                {post.likes_count > 0 && (
+                  <TouchableOpacity
+                    style={styles.likesCountButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setSelectedPostId(post.id);
+                      setLikesModalVisible(true);
+                    }}
+                  >
+                    <Text style={styles.likesCountText}>
+                        {post.likes_count === 1 
+                        ? t('screens.feed.onePersonLiked') 
+                        : `${post.likes_count} ${t('screens.feed.peopleLiked')}`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    navigation.navigate('PostDetail', { postId: post.id });
+                  }}
                 >
                   <Text style={styles.actionText}>
                     💬 {post.comments_count || 0}
                   </Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
       )}
 
       <AlertModal
         visible={alertVisible}
-        title="Feil"
+        title={t('common.error')}
         message={alertMessage}
         onClose={() => setAlertVisible(false)}
+      />
+
+      <LikesModal
+        visible={likesModalVisible}
+        postId={selectedPostId}
+        onClose={() => {
+          setLikesModalVisible(false);
+          setSelectedPostId(null);
+        }}
+        onUserPress={(userId: string) => {
+          // Navigate to user profile if needed
+          // For now, just close the modal
+          setLikesModalVisible(false);
+          setSelectedPostId(null);
+        }}
       />
     </View>
   );
@@ -443,6 +539,15 @@ const styles = StyleSheet.create({
   },
   actionTextLiked: {
     color: '#1ED760',
+  },
+  likesCountButton: {
+    flex: 1,
+    paddingVertical: 4,
+  },
+  likesCountText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
   },
 });
 

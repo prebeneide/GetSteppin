@@ -11,6 +11,7 @@ export interface Message {
   sender_id: string;
   receiver_id: string;
   content: string;
+  image_url: string | null;
   read_at: string | null;
   created_at: string;
   updated_at: string;
@@ -32,11 +33,13 @@ export interface ChatConversation {
 export const sendMessage = async (
   senderId: string,
   receiverId: string,
-  content: string
+  content: string,
+  imageUrl: string | null = null
 ): Promise<{ data: Message | null; error: any }> => {
   try {
-    if (!content.trim()) {
-      return { data: null, error: { message: 'Melding kan ikke være tom' } };
+    // Message must have either content or image
+    if (!content.trim() && !imageUrl) {
+      return { data: null, error: { message: 'Melding må ha tekst eller bilde' } };
     }
 
     const { data, error } = await supabase
@@ -44,7 +47,8 @@ export const sendMessage = async (
       .insert({
         sender_id: senderId,
         receiver_id: receiverId,
-        content: content.trim(),
+        content: content.trim() || '', // Empty string if no content
+        image_url: imageUrl,
       })
       .select()
       .single();
@@ -307,5 +311,30 @@ export const subscribeToMessages = (
  */
 export const unsubscribeFromMessages = (channel: RealtimeChannel): void => {
   supabase.removeChannel(channel);
+};
+
+/**
+ * Hent totalt antall uleste meldinger for en bruker
+ */
+export const getUnreadMessagesCount = async (
+  userId: string
+): Promise<{ data: number; error: any }> => {
+  try {
+    const { count, error } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('receiver_id', userId)
+      .is('read_at', null);
+
+    if (error) {
+      console.error('Error fetching unread messages count:', error);
+      return { data: 0, error };
+    }
+
+    return { data: count || 0, error: null };
+  } catch (err: any) {
+    console.error('Error in getUnreadMessagesCount:', err);
+    return { data: 0, error: err };
+  }
 };
 

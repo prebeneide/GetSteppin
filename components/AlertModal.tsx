@@ -33,6 +33,8 @@ export default function AlertModal({
       visible={visible}
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
+      presentationStyle="overFullScreen"
     >
       <View style={styles.overlay}>
         <View style={styles.container}>
@@ -49,7 +51,9 @@ export default function AlertModal({
                   buttons.length > 1 && styles.buttonWithMargin,
                 ]}
                 onPress={() => {
-                  button.onPress?.();
+                  if (button.onPress) {
+                    button.onPress();
+                  }
                   onClose();
                 }}
               >
@@ -78,6 +82,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 9999,
+    elevation: 9999,
   },
   container: {
     backgroundColor: '#fff',

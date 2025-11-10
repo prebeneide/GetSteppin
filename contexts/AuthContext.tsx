@@ -164,20 +164,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    // Før logg ut: sørg for at device_settings har samme avatar_url som user_profiles
-    // Dette sikrer at samme bilde vises uavhengig av innloggingsstatus
+    // Før logg ut: sørg for at device_settings har samme preferanser som user_profiles
+    // Dette sikrer at samme innstillinger (avatar, språk, avstandsenhet) vises uavhengig av innloggingsstatus
     const currentUser = user;
     if (currentUser) {
       try {
-        // Hent brukerens avatar_url
+        // Hent brukerens preferanser
         const { data: userProfile } = await supabase
           .from('user_profiles')
-          .select('avatar_url')
+          .select('avatar_url, language, distance_unit')
           .eq('id', currentUser.id)
           .single();
 
-        if (userProfile?.avatar_url) {
-          // Oppdater device_settings til å peke på samme bilde
+        if (userProfile) {
+          // Oppdater device_settings til å ha samme preferanser
           const deviceId = await getDeviceId();
           
           // Sjekk om device_settings eksisterer
@@ -187,28 +187,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .eq('device_id', deviceId)
             .single();
 
-          if (existing) {
-            // Oppdater eksisterende
-            await supabase
-              .from('device_settings')
-              .update({ avatar_url: userProfile.avatar_url })
-              .eq('device_id', deviceId);
-          } else {
-            // Opprett ny entry
-            await supabase
-              .from('device_settings')
-              .insert({
-                device_id: deviceId,
-                avatar_url: userProfile.avatar_url,
-              });
+          const updateData: any = {};
+          if (userProfile.avatar_url) {
+            updateData.avatar_url = userProfile.avatar_url;
+          }
+          if (userProfile.language) {
+            updateData.language = userProfile.language;
+          }
+          if (userProfile.distance_unit) {
+            updateData.distance_unit = userProfile.distance_unit;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            if (existing) {
+              // Oppdater eksisterende - vente på at oppdateringen er fullført
+              const { error: updateError } = await supabase
+                .from('device_settings')
+                .update(updateData)
+                .eq('device_id', deviceId);
+              
+              if (updateError) {
+                console.warn('[AuthContext] Error updating device_settings on sign out:', updateError);
+              } else {
+                console.log('[AuthContext] ✅ Synced preferences to device_settings:', updateData);
+                // Verifiser at oppdateringen var vellykket ved å hente dataen igjen
+                const { data: verifyData } = await supabase
+                  .from('device_settings')
+                  .select('language, distance_unit')
+                  .eq('device_id', deviceId)
+                  .single();
+                console.log('[AuthContext] Verified device_settings after sync:', verifyData);
+              }
+            } else {
+              // Opprett ny entry - vente på at insert er fullført
+              const { error: insertError } = await supabase
+                .from('device_settings')
+                .insert({
+                  device_id: deviceId,
+                  ...updateData,
+                });
+              
+              if (insertError) {
+                console.warn('[AuthContext] Error inserting device_settings on sign out:', insertError);
+              } else {
+                console.log('[AuthContext] ✅ Created device_settings with preferences:', updateData);
+              }
+            }
           }
         }
       } catch (err) {
-        console.warn('Error syncing avatar on sign out:', err);
+        console.warn('Error syncing preferences on sign out:', err);
         // Fortsett med logg ut selv om dette feiler
       }
     }
 
+    // Vent litt for å sikre at database-oppdateringen er fullført før vi logger ut
+    // Dette gir LanguageProvider tid til å laste språket fra device_settings
+    console.log('[AuthContext] Waiting before sign out to ensure sync is complete...');
+    await new Promise(resolve => setTimeout(resolve, 300)); // Increased delay to 300ms
+    
+    console.log('[AuthContext] Signing out...');
     await supabase.auth.signOut();
   };
 

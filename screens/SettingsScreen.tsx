@@ -15,6 +15,9 @@ import AlertModal from '../components/AlertModal';
 import * as Location from 'expo-location';
 import { getDeviceId } from '../lib/deviceId';
 import { Linking, Platform } from 'react-native';
+import { DistanceUnit } from '../lib/formatters';
+import { getUserPreferences } from '../lib/userPreferences';
+import { useTranslation, Language } from '../lib/i18n';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -22,6 +25,7 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { user } = useAuth();
+  const { t, language, setLanguage: setLanguagePref, reloadLanguage } = useTranslation();
   const [enableWalkTracking, setEnableWalkTracking] = useState(true);
   const [autoShareWalks, setAutoShareWalks] = useState(true);
   const [homeAreaRadius, setHomeAreaRadius] = useState(50);
@@ -32,10 +36,16 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [pauseRadius, setPauseRadius] = useState(10);
   const [homeLatitude, setHomeLatitude] = useState<number | null>(null);
   const [homeLongitude, setHomeLongitude] = useState<number | null>(null);
+  const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
+  const [activityNotificationsEnabled, setActivityNotificationsEnabled] = useState(true);
+  const [weeklyAverageNotificationsEnabled, setWeeklyAverageNotificationsEnabled] = useState(true);
+  const [topPercentageNotificationsEnabled, setTopPercentageNotificationsEnabled] = useState(true);
+  const [goalStreakNotificationsEnabled, setGoalStreakNotificationsEnabled] = useState(true);
+  const [weeklyGoalNotificationsEnabled, setWeeklyGoalNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('Feil');
+  const [alertTitle, setAlertTitle] = useState(t('common.error'));
   const [alertMessage, setAlertMessage] = useState('');
 
   // Load walk tracking settings
@@ -49,30 +59,42 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
   const loadSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('enable_walk_tracking, auto_share_walks, home_area_radius_meters, home_latitude, home_longitude, min_walk_distance_meters, min_walk_speed_kmh, max_walk_speed_kmh, pause_tolerance_minutes, pause_radius_meters')
-        .eq('id', user!.id)
-        .single();
+      // Load user preferences (distance unit, language, etc.)
+      const preferences = await getUserPreferences(user?.id || null);
+      setDistanceUnit(preferences.distance_unit);
+      // Language is loaded by useTranslation hook
 
-      if (error) throw error;
+      if (user) {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select('enable_walk_tracking, auto_share_walks, home_area_radius_meters, home_latitude, home_longitude, min_walk_distance_meters, min_walk_speed_kmh, max_walk_speed_kmh, pause_tolerance_minutes, pause_radius_meters, activity_notifications_enabled, weekly_average_notifications_enabled, top_percentage_notifications_enabled, goal_streak_notifications_enabled, weekly_goal_notifications_enabled')
+          .eq('id', user.id)
+          .single();
 
-      if (data) {
-        setEnableWalkTracking(data.enable_walk_tracking !== false);
-        setAutoShareWalks(data.auto_share_walks !== false);
-        setHomeAreaRadius(data.home_area_radius_meters || 50);
-        setHomeLatitude(data.home_latitude);
-        setHomeLongitude(data.home_longitude);
-        setMinWalkDistance(data.min_walk_distance_meters || 1000);
-        setMinWalkSpeed(data.min_walk_speed_kmh || 3.0);
-        setMaxWalkSpeed(data.max_walk_speed_kmh || 15.0);
-        setPauseTolerance(data.pause_tolerance_minutes || 15);
-        setPauseRadius(data.pause_radius_meters || 10);
+        if (error) throw error;
+
+        if (data) {
+          setEnableWalkTracking(data.enable_walk_tracking !== false);
+          setAutoShareWalks(data.auto_share_walks !== false);
+          setHomeAreaRadius(data.home_area_radius_meters || 50);
+          setHomeLatitude(data.home_latitude);
+          setHomeLongitude(data.home_longitude);
+          setMinWalkDistance(data.min_walk_distance_meters || 1000);
+          setMinWalkSpeed(data.min_walk_speed_kmh || 3.0);
+          setMaxWalkSpeed(data.max_walk_speed_kmh || 15.0);
+          setPauseTolerance(data.pause_tolerance_minutes || 15);
+          setPauseRadius(data.pause_radius_meters || 10);
+          setActivityNotificationsEnabled(data.activity_notifications_enabled !== false);
+          setWeeklyAverageNotificationsEnabled(data.weekly_average_notifications_enabled !== false);
+          setTopPercentageNotificationsEnabled(data.top_percentage_notifications_enabled !== false);
+          setGoalStreakNotificationsEnabled(data.goal_streak_notifications_enabled !== false);
+          setWeeklyGoalNotificationsEnabled(data.weekly_goal_notifications_enabled !== false);
+        }
       }
     } catch (err) {
       console.error('Error loading settings:', err);
-      setAlertTitle('Feil');
-      setAlertMessage('Kunne ikke laste innstillinger');
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotLoadSettings'));
       setAlertVisible(true);
     } finally {
       setLoading(false);
@@ -105,8 +127,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           try {
             const { status: foregroundRequestStatus } = await Location.requestForegroundPermissionsAsync();
             if (foregroundRequestStatus !== 'granted') {
-              setAlertTitle('Lokasjonstilgang nødvendig');
-              setAlertMessage('For å spore turer trenger appen tilgang til din lokasjon. Du kan gi tilgang i innstillinger.');
+              setAlertTitle(t('settings.locationAccessRequired'));
+              setAlertMessage(t('settings.locationAccessRequiredMessage'));
               setAlertVisible(true);
               return; // Don't enable tracking if permission not granted
             }
@@ -152,8 +174,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       
       // If Expo Go error, show info but allow enabling for foreground tracking
       if (isExpoGoError) {
-        setAlertTitle('Info');
-        setAlertMessage('Expo Go støtter ikke alle iOS-permissions. GPS-sporing vil fungere når appen er åpen (foreground tracking). For full funksjonalitet, bygg en development build.');
+        setAlertTitle(t('settings.expoGoInfo'));
+        setAlertMessage(t('settings.expoGoMessage'));
         setAlertVisible(true);
         // Continue to enable tracking anyway
       }
@@ -178,14 +200,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       setEnableWalkTracking(value);
       
       if (value) {
-        setAlertTitle('Suksess');
-        setAlertMessage('GPS-sporing er aktivert! Appen vil nå spore turer når du går utenfor hjemområdet ditt.');
+        setAlertTitle(t('common.success'));
+        setAlertMessage(t('settings.gpsTrackingActivated'));
         setAlertVisible(true);
       }
     } catch (err) {
       console.error('Error updating walk tracking:', err);
-      setAlertTitle('Feil');
-      setAlertMessage('Kunne ikke oppdatere innstilling');
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
       setAlertVisible(true);
       setEnableWalkTracking(!value); // Revert
     } finally {
@@ -207,8 +229,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       setAutoShareWalks(value);
     } catch (err) {
       console.error('Error updating auto share:', err);
-      setAlertTitle('Feil');
-      setAlertMessage('Kunne ikke oppdatere innstilling');
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
       setAlertVisible(true);
       setAutoShareWalks(!value); // Revert
     } finally {
@@ -238,17 +260,252 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       if (error) throw error;
       
       if (showSuccessMessage) {
-        setAlertTitle('Suksess');
-        setAlertMessage('Innstillinger lagret!');
+        setAlertTitle(t('common.success'));
+        setAlertMessage(t('settings.settingsSaved'));
         setAlertVisible(true);
       }
       return true;
     } catch (err) {
       console.error('Error updating home area settings:', err);
-      setAlertTitle('Feil');
-      setAlertMessage('Kunne ikke oppdatere innstillinger');
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettingsPlural'));
       setAlertVisible(true);
       return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateActivityNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const updateData: any = { activity_notifications_enabled: value };
+      
+      // If turning off master toggle, also turn off all specific toggles
+      if (!value) {
+        updateData.weekly_average_notifications_enabled = false;
+        updateData.top_percentage_notifications_enabled = false;
+        updateData.goal_streak_notifications_enabled = false;
+        updateData.weekly_goal_notifications_enabled = false;
+        setWeeklyAverageNotificationsEnabled(false);
+        setTopPercentageNotificationsEnabled(false);
+        setGoalStreakNotificationsEnabled(false);
+        setWeeklyGoalNotificationsEnabled(false);
+      }
+      
+      const { error } = await supabase
+        .from('user_profiles')
+        .update(updateData)
+        .eq('id', user.id);
+
+      if (error) throw error;
+      setActivityNotificationsEnabled(value);
+    } catch (err) {
+      console.error('Error updating activity notifications:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
+      setAlertVisible(true);
+      setActivityNotificationsEnabled(!value); // Revert
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateWeeklyAverageNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ weekly_average_notifications_enabled: value })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      setWeeklyAverageNotificationsEnabled(value);
+    } catch (err) {
+      console.error('Error updating weekly average notifications:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
+      setAlertVisible(true);
+      setWeeklyAverageNotificationsEnabled(!value); // Revert
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateTopPercentageNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ top_percentage_notifications_enabled: value })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      setTopPercentageNotificationsEnabled(value);
+    } catch (err) {
+      console.error('Error updating top percentage notifications:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
+      setAlertVisible(true);
+      setTopPercentageNotificationsEnabled(!value); // Revert
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateGoalStreakNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ goal_streak_notifications_enabled: value })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      setGoalStreakNotificationsEnabled(value);
+    } catch (err) {
+      console.error('Error updating goal streak notifications:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
+      setAlertVisible(true);
+      setGoalStreakNotificationsEnabled(!value); // Revert
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateWeeklyGoalNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ weekly_goal_notifications_enabled: value })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      setWeeklyGoalNotificationsEnabled(value);
+    } catch (err) {
+      console.error('Error updating weekly goal notifications:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateSettings'));
+      setAlertVisible(true);
+      setWeeklyGoalNotificationsEnabled(!value); // Revert
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateLanguage = async (lang: Language) => {
+    if (!user && !await getDeviceId()) return;
+    
+    setSaving(true);
+    try {
+      const deviceId = await getDeviceId();
+      
+      if (user) {
+        // Update user_profiles
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({ language: lang })
+          .eq('id', user.id);
+
+        if (error) throw error;
+        
+        // Also update device_settings to keep them in sync
+        // This ensures that when user logs out, device_settings already has the correct language
+        const { error: deviceError } = await supabase
+          .from('device_settings')
+          .upsert({
+            device_id: deviceId,
+            language: lang,
+          }, {
+            onConflict: 'device_id'
+          });
+        
+        if (deviceError) {
+          console.warn('Error syncing language to device_settings:', deviceError);
+          // Don't throw - user_profiles update was successful
+        } else {
+          console.log('[SettingsScreen] Synced language to device_settings:', lang);
+        }
+      } else {
+        // Update device_settings for anonymous users
+        const { error } = await supabase
+          .from('device_settings')
+          .upsert({
+            device_id: deviceId,
+            language: lang,
+          }, {
+            onConflict: 'device_id'
+          });
+
+        if (error) throw error;
+      }
+      
+      setLanguagePref(lang);
+      // Reload language in all components immediately
+      await reloadLanguage();
+      setAlertTitle(t('common.success'));
+      setAlertMessage(lang === 'nb' ? t('settings.languageChangedToNorwegian') : t('settings.languageChangedToEnglish'));
+      setAlertVisible(true);
+    } catch (err) {
+      console.error('Error updating language:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateLanguage'));
+      setAlertVisible(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateDistanceUnit = async (unit: DistanceUnit) => {
+    if (!user && !await getDeviceId()) return; // Can't update if no user and no device
+    
+    setSaving(true);
+    try {
+      const deviceId = await getDeviceId();
+      
+      if (user) {
+        // Update user_profiles
+        const { error } = await supabase
+          .from('user_profiles')
+          .update({ distance_unit: unit })
+          .eq('id', user.id);
+
+        if (error) throw error;
+      } else {
+        // Update device_settings for anonymous users
+        const { error } = await supabase
+          .from('device_settings')
+          .upsert({
+            device_id: deviceId,
+            distance_unit: unit,
+          }, {
+            onConflict: 'device_id'
+          });
+
+        if (error) throw error;
+      }
+      
+      setDistanceUnit(unit);
+      setAlertTitle(t('common.success'));
+      setAlertMessage(unit === 'km' ? t('settings.distanceUnitChangedToKm') : t('settings.distanceUnitChangedToMiles'));
+      setAlertVisible(true);
+    } catch (err) {
+      console.error('Error updating distance unit:', err);
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotUpdateDistanceUnit'));
+      setAlertVisible(true);
     } finally {
       setSaving(false);
     }
@@ -258,8 +515,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setAlertTitle('Feil');
-        setAlertMessage('Lokasjonstilgang er nødvendig for å sette hjemområdet');
+        setAlertTitle(t('common.error'));
+        setAlertMessage(t('settings.locationAccessRequiredForHome'));
         setAlertVisible(true);
         return;
       }
@@ -271,14 +528,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       // Auto-save after setting location
       const success = await updateHomeAreaSettings(false);
       if (success) {
-        setAlertTitle('Suksess');
-        setAlertMessage('Hjemområde satt til nåværende lokasjon!');
+        setAlertTitle(t('common.success'));
+        setAlertMessage(t('settings.homeAreaSetToCurrentLocation'));
         setAlertVisible(true);
       }
     } catch (err) {
       console.error('Error getting location:', err);
-      setAlertTitle('Feil');
-      setAlertMessage('Kunne ikke hente nåværende lokasjon');
+      setAlertTitle(t('common.error'));
+      setAlertMessage(t('settings.couldNotGetCurrentLocation'));
       setAlertVisible(true);
     }
   };
@@ -290,7 +547,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -299,14 +556,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Innstillinger</Text>
+          <Text style={styles.title}>{t('settings.title')}</Text>
 
           <View style={styles.section}>
             <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => navigation.navigate('GoalSettings')}
             >
-              <Text style={styles.settingsButtonText}>🎯 Daglig mål</Text>
+              <Text style={styles.settingsButtonText}>🎯 {t('settings.dailyGoal')}</Text>
               <Text style={styles.settingsButtonArrow}>→</Text>
             </TouchableOpacity>
           </View>
@@ -318,16 +575,113 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 style={styles.settingsButton}
                 onPress={() => navigation.navigate('PasswordSettings')}
               >
-                <Text style={styles.settingsButtonText}>🔒 Endre passord</Text>
+                <Text style={styles.settingsButtonText}>🔒 {t('settings.changePassword')}</Text>
                 <Text style={styles.settingsButtonArrow}>→</Text>
               </TouchableOpacity>
             </View>
           )}
 
+          {/* Language and Display Settings */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('settings.display')}</Text>
+            
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#1ED760" />
+              </View>
+            ) : (
+              <>
+                {/* Language Selector */}
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>{t('settings.language')}</Text>
+                    <Text style={styles.toggleDescription}>
+                      {t('settings.languageDescription')}
+                    </Text>
+                  </View>
+                  <View style={styles.unitSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
+                        language === 'nb' && styles.unitButtonActive
+                      ]}
+                      onPress={() => updateLanguage('nb')}
+                      disabled={saving}
+                    >
+                      <Text style={[
+                        styles.unitButtonText,
+                        language === 'nb' && styles.unitButtonTextActive
+                      ]}>
+                        🇳🇴 NO
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
+                        language === 'en' && styles.unitButtonActive
+                      ]}
+                      onPress={() => updateLanguage('en')}
+                      disabled={saving}
+                    >
+                      <Text style={[
+                        styles.unitButtonText,
+                        language === 'en' && styles.unitButtonTextActive
+                      ]}>
+                        🇬🇧 EN
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Distance Unit Selector */}
+                <View style={styles.toggleRow}>
+                  <View style={styles.toggleInfo}>
+                    <Text style={styles.toggleLabel}>{t('settings.distanceUnit')}</Text>
+                    <Text style={styles.toggleDescription}>
+                      {t('settings.distanceUnitDescription')}
+                    </Text>
+                  </View>
+                  <View style={styles.unitSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
+                        distanceUnit === 'km' && styles.unitButtonActive
+                      ]}
+                      onPress={() => updateDistanceUnit('km')}
+                      disabled={saving}
+                    >
+                      <Text style={[
+                        styles.unitButtonText,
+                        distanceUnit === 'km' && styles.unitButtonTextActive
+                      ]}>
+                      km
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.unitButton,
+                        distanceUnit === 'mi' && styles.unitButtonActive
+                      ]}
+                      onPress={() => updateDistanceUnit('mi')}
+                      disabled={saving}
+                    >
+                      <Text style={[
+                        styles.unitButtonText,
+                        distanceUnit === 'mi' && styles.unitButtonTextActive
+                      ]}>
+                        mi
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+
           {/* Walk Tracking Settings */}
           {user && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Turdeling</Text>
+              <Text style={styles.sectionTitle}>{t('settings.walkSharing')}</Text>
               
               {loading ? (
                 <View style={styles.loadingContainer}>
@@ -337,9 +691,9 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 <>
                   <View style={styles.toggleRow}>
                     <View style={styles.toggleInfo}>
-                      <Text style={styles.toggleLabel}>Aktiver GPS-sporing</Text>
+                      <Text style={styles.toggleLabel}>{t('settings.enableWalkTracking')}</Text>
                       <Text style={styles.toggleDescription}>
-                        Automatisk spore og registrere turer når du går eller løper utenfor hjemområdet ditt
+                        {t('settings.enableWalkTrackingDescription')}
                       </Text>
                     </View>
                     <Switch
@@ -354,12 +708,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                   <View style={[styles.toggleRow, styles.toggleRowIndented, !enableWalkTracking && styles.disabledRow]}>
                     <View style={styles.toggleInfo}>
                       <Text style={[styles.toggleLabel, !enableWalkTracking && styles.disabledText]}>
-                        Automatisk deling i feed
+                        {t('settings.autoShareWalks')}
                       </Text>
                       <Text style={[styles.toggleDescription, !enableWalkTracking && styles.disabledText]}>
                         {enableWalkTracking 
-                          ? 'Del turer automatisk som innlegg i feeden når de oppfyller kriteriene'
-                          : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                          ? t('settings.autoShareWalksDescription')
+                          : t('settings.enableGPSFirst')}
                       </Text>
                     </View>
                     <Switch
@@ -376,11 +730,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
                       {/* Home Area Settings */}
                       <View style={[styles.homeAreaSection, !enableWalkTracking && styles.disabledSection]}>
-                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>Hjemområde</Text>
+                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>{t('settings.homeArea')}</Text>
                         <Text style={[styles.homeAreaDescription, !enableWalkTracking && styles.disabledText]}>
                           {enableWalkTracking 
-                            ? 'Turer trackes kun når du går utenfor hjemområdet ditt. Dette forhindrer at turer registreres når du går rundt inne i huset ditt.'
-                            : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                            ? t('settings.homeAreaDescription')
+                            : t('settings.enableGPSFirst')}
                         </Text>
 
                         {/* Set Home Location Button */}
@@ -390,25 +744,25 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                           disabled={saving || !enableWalkTracking}
                         >
                           <Text style={[styles.setLocationButtonText, !enableWalkTracking && styles.disabledButtonText]}>
-                            📍 Sett nåværende lokasjon som hjem
+                            {t('settings.setCurrentLocation')}
                           </Text>
                         </TouchableOpacity>
 
                         {homeLatitude && homeLongitude && (
                           <Text style={styles.locationStatus}>
-                            Hjemområde satt: {homeLatitude.toFixed(6)}, {homeLongitude.toFixed(6)}
+                            {t('settings.homeAreaSet')}: {homeLatitude.toFixed(6)}, {homeLongitude.toFixed(6)}
                           </Text>
                         )}
 
                         {/* Home Area Radius */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Hjemområde radius: {homeAreaRadius}m (diameter: {homeAreaRadius * 2}m)
+                            {t('settings.homeAreaRadius')}: {homeAreaRadius}m ({t('settings.diameter')}: {homeAreaRadius * 2}m)
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Størrelsen på området rundt hjemmet ditt hvor turer ikke trackes. Jo større radius, jo lenger må du gå før tracking starter.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.homeAreaRadiusDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -448,22 +802,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
                       {/* Walk Criteria Settings */}
                       <View style={[styles.homeAreaSection, !enableWalkTracking && styles.disabledSection]}>
-                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>Kriterier for tur</Text>
+                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>{t('settings.walkCriteria')}</Text>
                         <Text style={[styles.homeAreaDescription, !enableWalkTracking && styles.disabledText]}>
                           {enableWalkTracking 
-                            ? 'Disse innstillingene bestemmer når en bevegelse skal registreres som en tur.'
-                            : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                            ? t('settings.walkCriteriaDescription')
+                            : t('settings.enableGPSFirst')}
                         </Text>
 
                         {/* Minimum Walk Distance */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Minimum strekning: {minWalkDistance}m
+                            {t('settings.minimumDistance')}: {minWalkDistance}m
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Den korteste strekningen en tur må være for å bli registrert. Turer kortere enn dette vil ikke bli lagret.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.minimumDistanceDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -503,12 +857,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                         {/* Minimum Walk Speed */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Minimum hastighet for å starte: {minWalkSpeed.toFixed(1)} km/h
+                            {t('settings.minimumSpeed')}: {minWalkSpeed.toFixed(1)} km/h
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Den laveste hastigheten du må gå for at tracking skal starte. Når tracking har startet, kan du gå sakte eller stoppe (f.eks. for å la hunden lukte) uten at tracking stopper. Eksempel: 3 km/h = normal gangfart.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.minimumSpeedDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -548,12 +902,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                         {/* Maximum Walk Speed */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Maksimal hastighet: {maxWalkSpeed.toFixed(1)} km/h
+                            {t('settings.maximumSpeed')}: {maxWalkSpeed.toFixed(1)} km/h
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Hvis hastigheten overstiger denne verdien UTEN at du har gått steg (f.eks. i bil eller på løpehjul), blir tracking avbrutt. Hvis du løper (med steg), fortsetter tracking uansett hastighet. Eksempel: 15 km/h = rask løping, men filtrerer ut bil/buss/sykkel/løpehjul.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.maximumSpeedDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -593,22 +947,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
                       {/* Pause Detection Settings */}
                       <View style={[styles.homeAreaSection, !enableWalkTracking && styles.disabledSection]}>
-                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>Pause-deteksjon</Text>
+                        <Text style={[styles.homeAreaTitle, !enableWalkTracking && styles.disabledText]}>{t('settings.pauseDetection')}</Text>
                         <Text style={[styles.homeAreaDescription, !enableWalkTracking && styles.disabledText]}>
                           {enableWalkTracking 
-                            ? 'Disse innstillingene bestemmer når en lang pause skal avbryte tracking. Brukes for å filtrere ut kjøpesenter-gående, men tillater pauser i parker/hundeparker.'
-                            : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                            ? t('settings.pauseDetectionDescription')
+                            : t('settings.enableGPSFirst')}
                         </Text>
 
                         {/* Pause Tolerance */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Pause-toleranse: {pauseTolerance} minutter
+                            {t('settings.pauseTolerance')}: {pauseTolerance} {t('settings.minutes')}
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Hvis du stopper lenger enn denne tiden innenfor pause-radius, blir tracking avbrutt. Hvis du har beveget deg mye før pausen (f.eks. i hundepark), blir turen lagret. Hvis du har beveget deg lite (f.eks. kjøpesenter), blir turen ikke registrert. Eksempel: 15 minutter = lunsj eller langt stopp.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.pauseToleranceDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -648,12 +1002,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                         {/* Pause Radius */}
                         <View style={styles.sliderContainer}>
                           <Text style={[styles.sliderLabel, !enableWalkTracking && styles.disabledText]}>
-                            Pause-radius: {pauseRadius}m
+                            {t('settings.pauseRadius')}: {pauseRadius}m
                           </Text>
                           <Text style={[styles.sliderDescription, !enableWalkTracking && styles.disabledText]}>
                             {enableWalkTracking 
-                              ? 'Hvis du stopper lenger enn pause-toleranse innenfor denne radiusen, blir tracking avbrutt. Jo mindre radius, jo mer bevegelse tillates før pausen registreres. Eksempel: 10m = omtrent et lite rom, 20m = større område.'
-                              : 'Aktiver GPS-sporing først for å bruke denne innstillingen'}
+                              ? t('settings.pauseRadiusDescription')
+                              : t('settings.enableGPSFirst')}
                           </Text>
                           <View style={[styles.sliderTrack, !enableWalkTracking && styles.disabledTrack]}>
                             <TouchableOpacity
@@ -698,8 +1052,8 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                           if (enableWalkTracking) {
                             const success = await updateHomeAreaSettings(true);
                             if (success) {
-                              setAlertTitle('Suksess');
-                              setAlertMessage('Innstillinger lagret!');
+                              setAlertTitle(t('common.success'));
+                              setAlertMessage(t('settings.settingsSaved'));
                               setAlertVisible(true);
                             }
                           }
@@ -710,12 +1064,123 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                           <ActivityIndicator size="small" color="#fff" />
                         ) : (
                           <Text style={[styles.saveButtonText, !enableWalkTracking && styles.disabledButtonText]}>
-                            Lagre innstillinger
+                            {t('settings.saveSettings')}
                           </Text>
                         )}
                       </TouchableOpacity>
                     </>
                   )}
+                </>
+              )}
+            </View>
+          )}
+
+          {/* Activity Notifications Settings */}
+          {user && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{t('settings.activityNotifications')}</Text>
+              
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#1ED760" />
+                </View>
+              ) : (
+                <>
+                  <View style={styles.toggleRow}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={styles.toggleLabel}>{t('settings.activityNotificationsMaster')}</Text>
+                      <Text style={styles.toggleDescription}>
+                        {t('settings.activityNotificationsMasterDescription')}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={activityNotificationsEnabled}
+                      onValueChange={updateActivityNotifications}
+                      disabled={saving}
+                      trackColor={{ false: '#e0e0e0', true: '#1ED760' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  <View style={[styles.toggleRow, styles.toggleRowIndented, !activityNotificationsEnabled && styles.disabledRow]}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={[styles.toggleLabel, !activityNotificationsEnabled && styles.disabledText]}>
+                        📈 {t('settings.weeklyAverageNotifications')}
+                      </Text>
+                      <Text style={[styles.toggleDescription, !activityNotificationsEnabled && styles.disabledText]}>
+                        {activityNotificationsEnabled 
+                          ? t('settings.weeklyAverageNotificationsDescription')
+                          : t('settings.enableActivityNotificationsFirst')}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={weeklyAverageNotificationsEnabled}
+                      onValueChange={updateWeeklyAverageNotifications}
+                      disabled={saving || !activityNotificationsEnabled}
+                      trackColor={{ false: '#e0e0e0', true: '#1ED760' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  <View style={[styles.toggleRow, styles.toggleRowIndented, !activityNotificationsEnabled && styles.disabledRow]}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={[styles.toggleLabel, !activityNotificationsEnabled && styles.disabledText]}>
+                        🏆 {t('settings.topPercentageNotifications')}
+                      </Text>
+                      <Text style={[styles.toggleDescription, !activityNotificationsEnabled && styles.disabledText]}>
+                        {activityNotificationsEnabled 
+                          ? t('settings.topPercentageNotificationsDescription')
+                          : t('settings.enableActivityNotificationsFirst')}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={topPercentageNotificationsEnabled}
+                      onValueChange={updateTopPercentageNotifications}
+                      disabled={saving || !activityNotificationsEnabled}
+                      trackColor={{ false: '#e0e0e0', true: '#1ED760' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  <View style={[styles.toggleRow, styles.toggleRowIndented, !activityNotificationsEnabled && styles.disabledRow]}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={[styles.toggleLabel, !activityNotificationsEnabled && styles.disabledText]}>
+                        ✅ {t('settings.goalStreakNotifications')}
+                      </Text>
+                      <Text style={[styles.toggleDescription, !activityNotificationsEnabled && styles.disabledText]}>
+                        {activityNotificationsEnabled 
+                          ? t('settings.goalStreakNotificationsDescription')
+                          : t('settings.enableActivityNotificationsFirst')}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={goalStreakNotificationsEnabled}
+                      onValueChange={updateGoalStreakNotifications}
+                      disabled={saving || !activityNotificationsEnabled}
+                      trackColor={{ false: '#e0e0e0', true: '#1ED760' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+
+                  <View style={[styles.toggleRow, styles.toggleRowIndented, !activityNotificationsEnabled && styles.disabledRow]}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={[styles.toggleLabel, !activityNotificationsEnabled && styles.disabledText]}>
+                        ✅ {t('settings.weeklyGoalNotifications')}
+                      </Text>
+                      <Text style={[styles.toggleDescription, !activityNotificationsEnabled && styles.disabledText]}>
+                        {activityNotificationsEnabled 
+                          ? t('settings.weeklyGoalNotificationsDescription')
+                          : t('settings.enableActivityNotificationsFirst')}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={weeklyGoalNotificationsEnabled}
+                      onValueChange={updateWeeklyGoalNotifications}
+                      disabled={saving || !activityNotificationsEnabled}
+                      trackColor={{ false: '#e0e0e0', true: '#1ED760' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
                 </>
               )}
             </View>
@@ -729,15 +1194,15 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         message={alertMessage}
         onClose={() => setAlertVisible(false)}
         buttons={
-          alertTitle === 'Lokasjonstilgang nødvendig' || alertTitle === 'Bakgrunnstilgang nødvendig'
+          alertTitle === t('settings.locationAccessRequired') || alertTitle === t('settings.backgroundAccessRequired')
             ? [
                 {
-                  text: 'Avbryt',
+                  text: t('settings.cancel'),
                   onPress: () => setAlertVisible(false),
                   style: 'cancel',
                 },
                 {
-                  text: 'Åpne innstillinger',
+                  text: t('settings.openSettings'),
                   onPress: () => {
                     setAlertVisible(false);
                     openAppSettings();
@@ -967,6 +1432,30 @@ const styles = StyleSheet.create({
   },
   disabledTrack: {
     opacity: 0.5,
+  },
+  unitSelector: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  unitButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    backgroundColor: '#fff',
+  },
+  unitButtonActive: {
+    borderColor: '#1ED760',
+    backgroundColor: '#1ED760',
+  },
+  unitButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+  },
+  unitButtonTextActive: {
+    color: '#fff',
   },
 });
 

@@ -5,6 +5,7 @@ import { WebView } from 'react-native-webview';
 import { WalkCoordinate } from '../services/walkService';
 import Svg, { Polyline, Circle, Rect } from 'react-native-svg';
 import { getMapUrl, APP_COLORS } from '../lib/mapConfig';
+import { useTranslation } from '../lib/i18n';
 
 interface WalkMapViewProps {
   coordinates: WalkCoordinate[];
@@ -13,6 +14,7 @@ interface WalkMapViewProps {
 }
 
 export default function WalkMapView({ coordinates, height = 250, showOpenButton = true }: WalkMapViewProps) {
+  const { t } = useTranslation();
   const [imageError, setImageError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
@@ -100,6 +102,8 @@ export default function WalkMapView({ coordinates, height = 250, showOpenButton 
   // Create interactive map HTML for modal
   const interactiveMapHtml = useMemo(() => {
     const pathData = pathCoordinates.map(c => `${c.lng},${c.lat}`).join(';');
+    const startLabel = t('common.start');
+    const endLabel = t('common.end');
     
     return `
       <!DOCTYPE html>
@@ -156,7 +160,7 @@ export default function WalkMapView({ coordinates, height = 250, showOpenButton 
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
               })
-            }).addTo(map).bindPopup('Start');
+            }).addTo(map).bindPopup('${startLabel}');
             
             // Add end marker (red)
             const endMarker = L.marker([${endCoord.lat}, ${endCoord.lng}], {
@@ -166,12 +170,12 @@ export default function WalkMapView({ coordinates, height = 250, showOpenButton 
                 iconSize: [24, 24],
                 iconAnchor: [12, 12]
               })
-            }).addTo(map).bindPopup('Slutt');
+            }).addTo(map).bindPopup('${endLabel}');
           </script>
         </body>
       </html>
     `;
-  }, [pathCoordinates, centerLat, centerLng, startCoord, endCoord]);
+  }, [pathCoordinates, centerLat, centerLng, startCoord, endCoord, t]);
 
   return (
     <>
@@ -240,7 +244,7 @@ export default function WalkMapView({ coordinates, height = 250, showOpenButton 
             style={styles.openButton}
             onPress={handleOpenInMaps}
           >
-            <Text style={styles.openButtonText}>Åpne i Google Maps →</Text>
+            <Text style={styles.openButtonText}>{t('common.openInGoogleMaps')} →</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -259,14 +263,14 @@ export default function WalkMapView({ coordinates, height = 250, showOpenButton 
             style={styles.modalCloseButton}
             onPress={() => setModalVisible(false)}
           >
-            <Text style={styles.modalCloseText}>← Lukk</Text>
+            <Text style={styles.modalCloseText}>{t('common.backArrow')}</Text>
           </TouchableOpacity>
-          <Text style={styles.modalTitle}>Rute</Text>
+          <Text style={styles.modalTitle}>{t('common.route')}</Text>
           <TouchableOpacity
             style={styles.modalOpenButton}
             onPress={handleOpenInMaps}
           >
-            <Text style={styles.modalOpenText}>Åpne →</Text>
+            <Text style={styles.modalOpenText}>{t('common.open')} →</Text>
           </TouchableOpacity>
         </View>
         <WebView

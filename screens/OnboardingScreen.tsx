@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import AlertModal from '../components/AlertModal';
+import { useTranslation } from '../lib/i18n';
 
 interface OnboardingScreenProps {
   navigation: any;
@@ -22,6 +23,7 @@ interface OnboardingScreenProps {
 
 export default function OnboardingScreen({ navigation, onComplete }: OnboardingScreenProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [goal, setGoal] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -38,13 +40,13 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
   const validateGoal = (value: string): string => {
     const num = parseInt(value, 10);
     if (isNaN(num)) {
-      return 'Vennligst skriv inn et tall';
+      return t('screens.onboarding.pleaseEnterNumber');
     }
     if (num < 1000) {
-      return 'Daglig mål må være minst 1000 skritt';
+      return t('screens.onboarding.minimum1000');
     }
     if (num > 100000) {
-      return 'Daglig mål kan ikke være mer enn 100,000 skritt';
+      return t('screens.onboarding.maximum100000');
     }
     return '';
   };
@@ -79,7 +81,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
 
         if (updateError) {
           console.error('Error updating goal:', updateError);
-          showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+          showAlert(t('common.error'), t('screens.onboarding.couldNotSave'));
           setLoading(false);
           return;
         }
@@ -106,7 +108,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
 
           if (updateError) {
             console.error('Error updating device goal:', updateError);
-            showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+            showAlert(t('common.error'), t('screens.onboarding.couldNotSave'));
             setLoading(false);
             return;
           }
@@ -121,7 +123,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
 
           if (insertError) {
             console.error('Error inserting device goal:', insertError);
-            showAlert('Feil', 'Kunne ikke lagre mål. Prøv igjen senere.');
+            showAlert(t('common.error'), t('screens.onboarding.couldNotSave'));
             setLoading(false);
             return;
           }
@@ -132,7 +134,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
       onComplete(goalNum);
     } catch (err: any) {
       console.error('Error setting goal:', err);
-      showAlert('Feil', 'Noe gikk galt. Prøv igjen senere.');
+      showAlert(t('common.error'), t('screens.onboarding.somethingWentWrong'));
     } finally {
       setLoading(false);
     }
@@ -152,35 +154,34 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
           <View style={styles.content}>
             <View style={styles.welcomeContainer}>
               <Text style={styles.welcomeEmoji}>👋</Text>
-              <Text style={styles.welcomeTitle}>Velkommen til Steppin!</Text>
+              <Text style={styles.welcomeTitle}>{t('screens.onboarding.welcomeTitle')}</Text>
               <Text style={styles.welcomeText}>
-                Klar for å ta første skritt mot et sunnere liv? 🚶‍♂️
+                {t('screens.onboarding.welcomeText')}
               </Text>
               <Text style={styles.motivationText}>
-                Hver skritt teller. Hver dag er en ny mulighet til å bli bedre enn i går. 
-                La oss sammen nå dine mål, en skritt om gangen! 💪
+                {t('screens.onboarding.motivationText')}
               </Text>
             </View>
 
           <View style={styles.goalContainer}>
             <Text style={styles.goalQuestion}>
-              Hvor mange skritt ønsker du å ta hver dag?
+              {t('screens.onboarding.goalQuestion')}
             </Text>
             <Text style={styles.goalHint}>
-              Anbefalt: 10,000 skritt (ca. 7-8 km)
+              {t('screens.onboarding.goalHint')}
             </Text>
 
             <View style={styles.inputContainer}>
               <TextInput
                 style={[styles.input, error && styles.inputError]}
-                placeholder="Eks: 10000"
+                placeholder={t('screens.onboarding.example')}
                 value={goal}
                 onChangeText={handleGoalChange}
                 keyboardType="number-pad"
                 maxLength={6}
                 editable={!loading}
               />
-              <Text style={styles.inputLabel}>skritt per dag</Text>
+              <Text style={styles.inputLabel}>{t('screens.onboarding.stepsPerDay')}</Text>
             </View>
 
             {error ? (
@@ -188,7 +189,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
             ) : null}
 
             <View style={styles.suggestionsContainer}>
-              <Text style={styles.suggestionsLabel}>Raskt valg:</Text>
+              <Text style={styles.suggestionsLabel}>{t('screens.onboarding.quickSelection')}:</Text>
               <View style={styles.suggestions}>
                 {[5000, 10000, 15000, 20000].map((suggestion) => (
                   <TouchableOpacity
@@ -225,10 +226,10 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
             {loading ? (
               <View style={styles.buttonLoading}>
                 <ActivityIndicator size="small" color="#fff" />
-                <Text style={styles.buttonText}>Lagrer...</Text>
+                <Text style={styles.buttonText}>{t('screens.onboarding.saving')}</Text>
               </View>
             ) : (
-              <Text style={styles.buttonText}>Start reisen! 🎯</Text>
+              <Text style={styles.buttonText}>{t('screens.onboarding.startJourney')}</Text>
             )}
           </TouchableOpacity>
 
@@ -241,7 +242,7 @@ export default function OnboardingScreen({ navigation, onComplete }: OnboardingS
               }}
               disabled={loading}
             >
-              <Text style={styles.skipButtonText}>Hopp over for nå</Text>
+              <Text style={styles.skipButtonText}>{t('screens.onboarding.skipForNow')}</Text>
             </TouchableOpacity>
           )}
           </View>

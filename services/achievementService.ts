@@ -1100,55 +1100,109 @@ export const checkRunningAchievements = async (
 
     const runningDistance = stepData.running_distance_meters || 0;
 
-    // Define milestones (in meters)
+    // Only award running achievements if there's actual running distance
+    // running_distance_meters is only calculated when speed >= 8 km/h
+    if (runningDistance === 0) {
+      return; // No running detected today
+    }
+
+    // Define milestones (in meters) - ordered from highest to lowest
+    // We'll award only the highest milestone achieved
     const milestones = [
-      { distance: 5000, emoji: '🏃', name: '5 km løpt' }, // 5 km
-      { distance: 10000, emoji: '🏃‍♀️', name: '10 km løpt' }, // 10 km
+      { distance: 42200, emoji: '🏃‍♂️', name: 'Maraton løpt' }, // 42,2 km (maraton) - highest
       { distance: 21100, emoji: '🏁', name: 'Halvmaraton løpt' }, // 21,1 km (halvmaraton)
-      { distance: 42200, emoji: '🏃‍♂️', name: 'Maraton løpt' }, // 42,2 km (maraton)
+      { distance: 10000, emoji: '🏃‍♀️', name: '10 km løpt' }, // 10 km
+      { distance: 5000, emoji: '🏃', name: '5 km løpt' }, // 5 km - lowest
     ];
 
-    // Check each milestone
+    // Find the highest milestone achieved
+    let highestMilestone = null;
     for (const milestone of milestones) {
       if (runningDistance >= milestone.distance) {
-        // Get achievement type
-        const achievementType = await getAchievementType(milestone.emoji);
-        if (!achievementType) {
-          console.error(`Could not find running achievement type: ${milestone.emoji}`);
-          continue;
-        }
+        highestMilestone = milestone;
+        break; // Found the highest milestone, stop checking
+      }
+    }
 
-        // Check if already awarded today
-        const todayDate = today;
-        let checkQuery = supabase
-          .from('achievement_log')
-          .select('id')
-          .eq('achievement_type_id', achievementType.id)
-          .gte('earned_at', `${todayDate}T00:00:00`)
-          .lt('earned_at', `${todayDate}T23:59:59`);
+    // If no milestone achieved, return
+    if (!highestMilestone) {
+      return;
+    }
 
-        if (userId) {
-          checkQuery = checkQuery.eq('user_id', userId);
-        } else {
-          checkQuery = checkQuery.eq('device_id', deviceId!).is('user_id', null);
-        }
+    // Get achievement type for the highest milestone
+    const achievementType = await getAchievementType(highestMilestone.emoji);
+    if (!achievementType) {
+      console.error(`Could not find running achievement type: ${highestMilestone.emoji}`);
+      return;
+    }
 
-        const { data: logs } = await checkQuery;
+    // Check if this achievement (or any higher achievement) was already awarded today
+    const todayDate = today;
+    
+    // Check all running achievement types to see if any was awarded today
+    // This prevents awarding a lower achievement if a higher one was already awarded
+    const allRunningEmojis = ['🏃‍♂️', '🏁', '🏃‍♀️', '🏃'];
+    const allRunningTypes = await Promise.all(
+      allRunningEmojis.map(emoji => getAchievementType(emoji))
+    );
+    const allRunningTypeIds = allRunningTypes
+      .filter(type => type !== null)
+      .map(type => type!.id);
 
-        // Only award once per day per milestone
-        if (!logs || logs.length === 0) {
-          // Award the achievement
-          await awardAchievement(userId, deviceId || null, achievementType.id, {
-            distance: milestone.distance,
-            running_distance: runningDistance,
-            date: today,
-            type: 'running',
-          });
+    let checkQuery = supabase
+      .from('achievement_log')
+      .select('id, achievement_type_id')
+      .in('achievement_type_id', allRunningTypeIds)
+      .gte('earned_at', `${todayDate}T00:00:00`)
+      .lt('earned_at', `${todayDate}T23:59:59`);
 
-          console.log(`Awarded ${milestone.emoji} ${milestone.name} (${(runningDistance / 1000).toFixed(2)} km løpt)`);
+    if (userId) {
+      checkQuery = checkQuery.eq('user_id', userId);
+    } else {
+      checkQuery = checkQuery.eq('device_id', deviceId!).is('user_id', null);
+    }
+
+    const { data: logs } = await checkQuery;
+
+    // If any running achievement was awarded today, don't award again
+    // This prevents duplicate awards and ensures we only award the highest
+    if (logs && logs.length > 0) {
+      // Check if the highest milestone was already awarded
+      const highestAlreadyAwarded = logs.some(log => log.achievement_type_id === achievementType.id);
+      if (highestAlreadyAwarded) {
+        return; // Already awarded today
+      }
+      
+      // If a higher achievement was awarded, don't award a lower one
+      // (This shouldn't happen with the new logic, but safety check)
+      const awardedTypeIds = logs.map(log => log.achievement_type_id);
+      const awardedTypes = allRunningTypes.filter(type => 
+        type && awardedTypeIds.includes(type.id)
+      );
+      
+      // Check if any awarded achievement is higher than the one we're about to award
+      for (const awardedType of awardedTypes) {
+        if (!awardedType) continue;
+        const awardedEmoji = awardedType.emoji;
+        const awardedIndex = milestones.findIndex(m => m.emoji === awardedEmoji);
+        const currentIndex = milestones.findIndex(m => m.emoji === highestMilestone.emoji);
+        
+        if (awardedIndex >= 0 && currentIndex >= 0 && awardedIndex < currentIndex) {
+          // A higher achievement was already awarded, don't award this lower one
+          return;
         }
       }
     }
+
+    // Award the highest achievement
+    await awardAchievement(userId, deviceId || null, achievementType.id, {
+      distance: highestMilestone.distance,
+      running_distance: runningDistance,
+      date: today,
+      type: 'running',
+    });
+
+    console.log(`Awarded ${highestMilestone.emoji} ${highestMilestone.name} (${(runningDistance / 1000).toFixed(2)} km løpt)`);
   } catch (err) {
     console.error('Error in checkRunningAchievements:', err);
   }

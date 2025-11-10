@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   type ChatConversation,
 } from '../services/chatService';
 import OnlineIndicator from '../components/OnlineIndicator';
+import { useTranslation } from '../lib/i18n';
 
 /**
  * Sjekker om en bruker har vært online/innlogget de siste 10 minuttene
@@ -40,6 +41,7 @@ interface ChatListScreenProps {
 
 export default function ChatListScreen({ navigation }: ChatListScreenProps) {
   const { user } = useAuth();
+  const { t, language } = useTranslation();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,11 +89,12 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const locale = language === 'en' ? 'en-US' : 'nb-NO';
 
     if (messageDate.getTime() === today.getTime()) {
-      return date.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
     } else {
-      return date.toLocaleString('nb-NO', { 
+      return date.toLocaleString(locale, { 
         day: 'numeric', 
         month: 'short',
       });
@@ -103,11 +106,11 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
-          <Text style={styles.loginPrompt}>Du må logge inn for å se samtaler</Text>
+          <Text style={styles.loginPrompt}>{t('screens.messages.loginPrompt')}</Text>
         </View>
       </View>
     );
@@ -118,7 +121,7 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← Tilbake</Text>
+            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -132,9 +135,9 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Meldinger</Text>
+        <Text style={styles.headerTitle}>{t('screens.messages.title')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -146,9 +149,9 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
       >
         {conversations.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Ingen samtaler ennå</Text>
+            <Text style={styles.emptyText}>{t('screens.messages.empty')}</Text>
             <Text style={styles.emptySubtext}>
-              Gå til venner for å starte en samtale
+              {t('screens.messages.emptySubtext')}
             </Text>
           </View>
         ) : (
@@ -193,7 +196,10 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
                   </View>
                   {conversation.last_message && (
                     <Text
-                      style={styles.conversationPreview}
+                      style={[
+                        styles.conversationPreview,
+                        conversation.unread_count > 0 && styles.conversationPreviewUnread,
+                      ]}
                       numberOfLines={1}
                       ellipsizeMode="tail"
                     >
@@ -333,6 +339,10 @@ const styles = StyleSheet.create({
   conversationPreview: {
     fontSize: 14,
     color: '#666',
+  },
+  conversationPreviewUnread: {
+    fontWeight: '600',
+    color: '#333',
   },
   unreadBadge: {
     backgroundColor: '#1ED760',

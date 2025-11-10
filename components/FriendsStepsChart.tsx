@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from '../lib/i18n';
 import { getFriendsStepsForPeriod, FriendStepData } from '../services/friendService';
 import OnlineIndicator from './OnlineIndicator';
 
@@ -140,6 +141,7 @@ const getActivityType = (friend: FriendStepData): 'walking' | 'jogging' | 'runni
 
 export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsChartProps) {
   const { user } = useAuth();
+  const { t, language } = useTranslation();
   const [friendsSteps, setFriendsSteps] = useState<FriendStepData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,16 +216,17 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
   };
 
   const getPeriodLabel = () => {
-    if (period === 'day') return 'I dag';
+    if (period === 'day') return t('screens.friendsSteps.today');
     if (period === 'week') {
-      if (weekOffset === 0) return 'Denne uken';
-      if (weekOffset === -1) return 'Forrige uke';
-      return `Uke ${weekOffset < 0 ? Math.abs(weekOffset) : weekOffset + 1}`;
+      if (weekOffset === 0) return t('screens.friendsSteps.thisWeek');
+      if (weekOffset === -1) return t('screens.statistics.lastWeek');
+      return `${t('screens.friendsSteps.week')} ${weekOffset < 0 ? Math.abs(weekOffset) : weekOffset + 1}`;
     }
     if (period === 'month') {
       const targetMonth = new Date();
       targetMonth.setMonth(targetMonth.getMonth() + monthOffset);
-      return targetMonth.toLocaleDateString('nb-NO', { month: 'long', year: 'numeric' });
+      const locale = language === 'en' ? 'en-US' : 'nb-NO';
+      return targetMonth.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
     }
     const targetYear = new Date().getFullYear() + yearOffset;
     return targetYear.toString();
@@ -241,7 +244,21 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
 
       if (fetchError) {
         console.error('Error loading friends steps:', fetchError);
-        setError('Kunne ikke laste vennenes skritt');
+        
+        // Check if error is due to no friends (UUID error with empty string)
+        // This happens when user has no friends and the query tries to use an empty array
+        const isNoFriendsError = 
+          fetchError.code === '22P02' || // Invalid UUID syntax
+          (fetchError.message && fetchError.message.includes('invalid input syntax for type uuid'));
+        
+        if (isNoFriendsError) {
+          // User has no friends - show friendly message instead of error
+          setFriendsSteps([]);
+          setError(null); // Don't show error, just show empty state
+        } else {
+          // Actual error - show error message
+          setError(t('screens.friendsSteps.couldNotLoad'));
+        }
       } else {
         setFriendsSteps(data || []);
         
@@ -261,7 +278,19 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
       }
     } catch (err) {
       console.error('Error in loadFriendsSteps:', err);
-      setError('Noe gikk galt');
+      
+      // Check if error is due to no friends
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const isNoFriendsError = errorMessage.includes('invalid input syntax for type uuid');
+      
+      if (isNoFriendsError) {
+        // User has no friends - show friendly message instead of error
+        setFriendsSteps([]);
+        setError(null); // Don't show error, just show empty state
+      } else {
+        // Actual error - show error message
+        setError(t('common.error'));
+      }
     } finally {
       setLoading(false);
     }
@@ -275,7 +304,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#1ED760" />
@@ -288,7 +317,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
         </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -301,11 +330,11 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 Vennenes skritt i dag</Text>
+          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
         </View>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
-            Legg til venner for å se deres skritt!
+            {t('screens.friendsSteps.addFriendsToSee')}
           </Text>
         </View>
       </View>
@@ -342,12 +371,12 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>👥 Vennenes skritt</Text>
+          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsSteps')}</Text>
           <Text style={styles.periodLabel}>{getPeriodLabel()}</Text>
         </View>
         {currentUserRank !== null && (
           <Text style={styles.rankText}>
-            Du er på {currentUserRank}. plass!
+            {t('screens.friendsSteps.youAreIn')} {currentUserRank}. {t('screens.friendsSteps.place')}!
           </Text>
         )}
         
@@ -363,7 +392,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
             }}
           >
             <Text style={[styles.periodButtonText, period === 'day' && styles.periodButtonTextActive]}>
-              Dag
+              {t('screens.friendsSteps.day')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -376,7 +405,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
             }}
           >
             <Text style={[styles.periodButtonText, period === 'week' && styles.periodButtonTextActive]}>
-              Uke
+              {t('screens.friendsSteps.week')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -389,7 +418,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
             }}
           >
             <Text style={[styles.periodButtonText, period === 'month' && styles.periodButtonTextActive]}>
-              Måned
+              {t('screens.friendsSteps.month')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -402,7 +431,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
             }}
           >
             <Text style={[styles.periodButtonText, period === 'year' && styles.periodButtonTextActive]}>
-              År
+              {t('screens.friendsSteps.year')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -524,7 +553,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
                         {/* "Du" badge for current user - på profilbildet */}
                         {isCurrentUser && (
                           <View style={styles.currentUserBadge}>
-                            <Text style={styles.currentUserBadgeText}>Du</Text>
+                            <Text style={styles.currentUserBadgeText}>{t('screens.friendsSteps.you')}</Text>
                           </View>
                         )}
                       </View>
