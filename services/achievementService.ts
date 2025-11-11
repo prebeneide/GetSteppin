@@ -415,7 +415,8 @@ export const checkGoalAchievement = async (
 
 /**
  * Check and award streak achievement (🔥)
- * Note: This requires checking consecutive days, so it needs to query step_data
+ * Streak is based on consecutive days the user has opened the app (and app has recorded steps)
+ * If there's a gap (a full day without app usage), the streak resets to 0
  */
 export const checkStreakAchievement = async (
   userId: string | null,
@@ -427,16 +428,21 @@ export const checkStreakAchievement = async (
       deviceId = await getDeviceId();
     }
 
-    // Check last 7 days to see if there's a streak
+    // Check up to 365 days back to find the longest streak
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // Query step_data for up to 365 days back
+    // We need to check all days to find consecutive days from today backwards
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 365);
     
     let query = supabase
       .from('step_data')
       .select('date, steps')
-      .gte('date', new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .gte('date', startDate.toISOString().split('T')[0])
       .lte('date', today.toISOString().split('T')[0])
-      .gt('steps', 0) // Only count days with steps
+      .gt('steps', 0) // Only count days with steps > 0 (user was in app)
       .order('date', { ascending: false });
 
     if (userId) {
@@ -448,34 +454,45 @@ export const checkStreakAchievement = async (
     const { data: stepData, error } = await query;
 
     if (error || !stepData || stepData.length === 0) {
+      // No data = no streak
       return;
     }
 
-    // Calculate consecutive days from today backwards
-    let streak = 0;
-    const dates = new Set(stepData.map(d => d.date));
+    // Create a Set of dates that have step data (user was in app)
+    const datesWithData = new Set(stepData.map(d => d.date));
     
-    for (let i = 0; i < 365; i++) { // Check up to 365 days
+    // Calculate consecutive days from today backwards
+    // Start from today (i=0) and go backwards day by day
+    // If we find a gap (a day without data), the streak ends
+    let streak = 0;
+    
+    for (let i = 0; i < 365; i++) {
       const checkDate = new Date(today);
       checkDate.setDate(checkDate.getDate() - i);
       const dateStr = checkDate.toISOString().split('T')[0];
       
-      if (dates.has(dateStr)) {
+      if (datesWithData.has(dateStr)) {
+        // This day has data (user was in app) - continue streak
         streak++;
       } else {
+        // Gap found - streak ends here
         break;
       }
     }
 
+    console.log(`[Streak] Calculated streak: ${streak} days for ${userId || deviceId}`);
+
     // Award streak achievements for milestones (3, 7, 14, 30, 100 days)
+    // Only award if streak is at least 3 days
     if (streak >= 3) {
       const streakType = await getAchievementType('🔥');
       if (streakType) {
         const milestones = [3, 7, 14, 30, 100];
         
         for (const milestone of milestones) {
-          // Check if we just reached this milestone
-          if (streak === milestone || (streak > milestone && streak <= milestone + 1)) {
+          // Award milestone if we just reached it (exactly at milestone)
+          // Or if we're past it but haven't awarded it yet
+          if (streak === milestone || (streak > milestone && streak < milestone + 2)) {
             // Check if this milestone was already awarded
             let checkQuery = supabase
               .from('achievement_log')
@@ -492,6 +509,7 @@ export const checkStreakAchievement = async (
             const { data: existing } = await checkQuery.limit(1);
 
             if (!existing || existing.length === 0) {
+              console.log(`[Streak] Awarding milestone ${milestone} for streak of ${streak} days`);
               await awardAchievement(userId, deviceId || null, streakType.id, {
                 streak,
                 milestone,

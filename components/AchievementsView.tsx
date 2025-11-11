@@ -565,62 +565,73 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
             </View>
             {/* Delt opp i I DAG (foreløpige) og TIDLIGERE (permanente) - translated below */}
             <ScrollView contentContainerStyle={styles.modalListContent}>
-              {/* I dag */}
+              {/* I dag - viser kun foreløpige prestasjoner */}
               <Text style={styles.sectionHeader}>{t('screens.achievements.today')}</Text>
-              {achievements.filter(a => a.isPreliminary).length === 0 ? (
-                <Text style={styles.sectionEmpty}>{t('screens.achievements.noPreliminaryYet')}</Text>
-              ) : (
-                achievements
-                  .filter(a => a.isPreliminary)
-                  .map(item => (
-                    <View
-                      key={item.id}
-                      style={[
-                        styles.modalAchievementItem,
-                        item.isPreliminary && styles.modalAchievementItemPreliminary,
-                      ]}
-                    >
-                      <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
-                      <View style={styles.modalAchievementInfo}>
-                        <View style={styles.modalAchievementHeader}>
-                          <Text style={styles.modalAchievementName}>{item.name}</Text>
-                          <Text style={styles.modalPreliminaryBadge}>{t('screens.achievements.preliminary')}</Text>
-                        </View>
-                        {item.description && (
-                          <Text style={styles.modalAchievementDescription}>{item.description}</Text>
-                        )}
+              {(() => {
+                const preliminaryAchievements = achievements.filter(a => a.isPreliminary);
+                if (preliminaryAchievements.length === 0) {
+                  return <Text style={styles.sectionEmpty}>{t('screens.achievements.noPreliminaryYet')}</Text>;
+                }
+                return preliminaryAchievements.map(item => (
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.modalAchievementItem,
+                      item.isPreliminary && styles.modalAchievementItemPreliminary,
+                    ]}
+                  >
+                    <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
+                    <View style={styles.modalAchievementInfo}>
+                      <View style={styles.modalAchievementHeader}>
+                        <Text style={styles.modalAchievementName}>{item.name}</Text>
+                        <Text style={styles.modalPreliminaryBadge}>{t('screens.achievements.preliminary')}</Text>
                       </View>
+                      {item.description && (
+                        <Text style={styles.modalAchievementDescription}>{item.description}</Text>
+                      )}
                     </View>
-                  ))
-              )}
+                  </View>
+                ));
+              })()}
 
-              {/* Tidligere */}
+              {/* Tidligere - viser kun permanente prestasjoner som IKKE har en foreløpig versjon */}
               <Text style={[styles.sectionHeader, { marginTop: 16 }]}>{t('screens.achievements.previous')}</Text>
-              {achievements.filter(a => !a.isPreliminary).length === 0 ? (
-                <Text style={styles.sectionEmpty}>{t('screens.achievements.noAchievementsYet')}</Text>
-              ) : (
-                achievements
-                  .filter(a => !a.isPreliminary)
-                  .map(item => (
-                    <View
-                      key={item.id}
-                      style={styles.modalAchievementItem}
-                    >
-                      <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
-                      <View style={styles.modalAchievementInfo}>
-                        <View style={styles.modalAchievementHeader}>
-                          <Text style={styles.modalAchievementName}>{item.name}</Text>
-                        </View>
-                        {item.description && (
-                          <Text style={styles.modalAchievementDescription}>{item.description}</Text>
-                        )}
-                        {item.count > 1 && (
-                          <Text style={styles.modalAchievementCountText}>{t('screens.achievements.earned')} {item.count} {t('screens.achievements.times')}</Text>
-                        )}
+              {(() => {
+                // Filtrer ut permanente prestasjoner som har en foreløpig versjon med samme emoji
+                const permanentAchievements = achievements.filter(achievement => {
+                  if (achievement.isPreliminary) {
+                    return false; // Ikke vis foreløpige i "Tidligere"
+                  }
+                  // For permanente prestasjoner, vis dem kun hvis det ikke finnes en foreløpig med samme emoji
+                  const hasPreliminary = achievements.some(a => 
+                    a.isPreliminary && a.emoji === achievement.emoji
+                  );
+                  return !hasPreliminary;
+                });
+                
+                if (permanentAchievements.length === 0) {
+                  return <Text style={styles.sectionEmpty}>{t('screens.achievements.noAchievementsYet')}</Text>;
+                }
+                return permanentAchievements.map(item => (
+                  <View
+                    key={item.id}
+                    style={styles.modalAchievementItem}
+                  >
+                    <Text style={styles.modalAchievementEmoji}>{item.emoji}</Text>
+                    <View style={styles.modalAchievementInfo}>
+                      <View style={styles.modalAchievementHeader}>
+                        <Text style={styles.modalAchievementName}>{item.name}</Text>
                       </View>
+                      {item.description && (
+                        <Text style={styles.modalAchievementDescription}>{item.description}</Text>
+                      )}
+                      {item.count > 1 && (
+                        <Text style={styles.modalAchievementCountText}>{t('screens.achievements.earned')} {item.count} {t('screens.achievements.times')}</Text>
+                      )}
                     </View>
-                  ))
-              )}
+                  </View>
+                ));
+              })()}
             </ScrollView>
           </View>
         </View>

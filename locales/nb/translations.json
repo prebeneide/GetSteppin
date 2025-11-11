@@ -343,7 +343,9 @@
       "sendMessage": "Send melding",
       "compare": "Sammenlign",
       "couldNotLoad": "Kunne ikke laste vennens profil",
-      "friend": "Venn"
+      "friend": "Venn",
+      "sharedWalks": "Delte turer",
+      "noSharedWalks": "Denne brukeren har ikke delt noen turer ennå"
     },
     "login": {
       "title": "Logg inn på din konto",
@@ -426,6 +428,7 @@
       "dailyOverview": "Daglig oversikt",
       "noDataAvailable": "Ingen data tilgjengelig",
       "thisWeek": "Denne uken",
+      "lastWeek": "Forrige uke",
       "week": "Uke",
       "month": "Måned",
       "year": "År",

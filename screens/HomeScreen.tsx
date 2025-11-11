@@ -563,17 +563,17 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
         <AchievementsView userId={user?.id || null} isLoggedIn={!!user} />
       </View>
 
-              {/* Statistics Section - Always show, works for both logged in and anonymous users */}
-              <View style={styles.statisticsWrapper}>
-                <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
-              </View>
-
               {/* Friends Steps Chart - Only show if logged in */}
               {user && (
                 <View style={styles.friendsChartWrapper}>
                   <FriendsStepsChart userId={user.id} isLoggedIn={!!user} />
                 </View>
               )}
+
+              {/* Statistics Section - Always show, works for both logged in and anonymous users */}
+              <View style={styles.statisticsWrapper}>
+                <StatisticsView userId={user?.id || null} isLoggedIn={!!user} />
+              </View>
 
 
               {/* Login prompt for friends feature - Always at bottom */}

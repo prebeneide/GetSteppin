@@ -344,10 +344,11 @@ export const getPopularPosts = async (
 };
 
 /**
- * Get user's posts
+ * Get user's posts (public posts only, or all if viewing own profile)
  */
 export const getUserPosts = async (
   userId: string,
+  currentUserId: string | null = null,
   limit: number = 50,
   offset: number = 0
 ): Promise<{ data: PostWithDetails[]; error: any }> => {
@@ -357,9 +358,7 @@ export const getUserPosts = async (
       .select(`
         *,
         user:user_profiles!posts_user_id_fkey(username, avatar_url),
-        walk:walks(*),
-        likes:post_likes(count),
-        comments:post_comments(count)
+        walk:walks(*)
       `)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -371,28 +370,66 @@ export const getUserPosts = async (
       return { data: [], error };
     }
 
-    // Transform data
-    const posts: PostWithDetails[] = (data || []).map((post: any) => ({
-      id: post.id,
-      user_id: post.user_id,
-      walk_id: post.walk_id,
-      content: post.content,
-      image_url: post.image_url || null,
-      images: post.images || null,
-      primary_image_index: post.primary_image_index || 0,
-      map_position: post.map_position !== undefined ? post.map_position : -1,
-      created_at: post.created_at,
-      updated_at: post.updated_at,
-      username: post.user?.username || 'Ukjent',
-      avatar_url: post.user?.avatar_url || null,
-      walk: post.walk || null,
-      likes_count: post.likes?.length || 0,
-      comments_count: post.comments?.length || 0,
-      is_liked: false,
-      has_user_liked: false,
-    }));
+    // Filter out private posts if not viewing own profile
+    const isOwnProfile = currentUserId === userId;
+    const filteredPosts = (data || []).filter((post: any) => {
+      if (isOwnProfile) return true; // Show all own posts
+      // Only show public posts for other users
+      return post.display_settings?.is_public !== false;
+    });
 
-    return { data: posts, error: null };
+    // Get likes and comments count, and check if current user liked each post
+    const postsWithDetails = await Promise.all(
+      filteredPosts.map(async (post: any) => {
+        // Get likes count
+        const { count: likesCount } = await supabase
+          .from('post_likes')
+          .select('id', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        // Get comments count
+        const { count: commentsCount } = await supabase
+          .from('post_comments')
+          .select('id', { count: 'exact', head: true })
+          .eq('post_id', post.id);
+
+        // Check if current user liked this post
+        let isLiked = false;
+        if (currentUserId) {
+          const { data: likeData } = await supabase
+            .from('post_likes')
+            .select('id')
+            .eq('post_id', post.id)
+            .eq('user_id', currentUserId)
+            .maybeSingle();
+          
+          isLiked = !!likeData;
+        }
+
+        return {
+          id: post.id,
+          user_id: post.user_id,
+          walk_id: post.walk_id,
+          content: post.content,
+          image_url: post.image_url || null,
+          images: post.images || null,
+          primary_image_index: post.primary_image_index || 0,
+          map_position: post.map_position !== undefined ? post.map_position : -1,
+          display_settings: post.display_settings || null,
+          created_at: post.created_at,
+          updated_at: post.updated_at,
+          username: post.user?.username || 'Ukjent',
+          avatar_url: post.user?.avatar_url || null,
+          walk: post.walk || null,
+          likes_count: likesCount || 0,
+          comments_count: commentsCount || 0,
+          is_liked: isLiked,
+          has_user_liked: isLiked,
+        };
+      })
+    );
+
+    return { data: postsWithDetails, error: null };
   } catch (err) {
     console.error('Error in getUserPosts:', err);
     return { data: [], error: err };

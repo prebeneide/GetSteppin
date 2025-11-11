@@ -92,6 +92,8 @@ function FriendsStack() {
       <Stack.Screen name="AddFriend" component={AddFriendScreen} />
       <Stack.Screen name="FriendProfile" component={FriendProfileScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="PostWalkDetail" component={PostWalkDetailScreen} />
     </Stack.Navigator>
   );
 }

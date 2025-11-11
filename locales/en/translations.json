@@ -347,7 +347,9 @@
       "sendMessage": "Send Message",
       "compare": "Compare",
       "couldNotLoad": "Could not load friend's profile",
-      "friend": "Friend"
+      "friend": "Friend",
+      "sharedWalks": "Shared Walks",
+      "noSharedWalks": "This user hasn't shared any walks yet"
     },
     "login": {
       "title": "Log in to your account",
