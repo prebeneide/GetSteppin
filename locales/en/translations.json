@@ -227,6 +227,9 @@
       "trackingWaiting": "Tracking active (waiting for movement)",
       "trackingPermission": "Tracking waiting for permission",
       "gpsNotActivated": "GPS tracking not activated - Go to Settings",
+      "liveWalkTitle": "Active Walk",
+      "duration": "Duration",
+      "paceUnit": "min/km",
       "starting": "Starting...",
       "minutesAgo": "min ago",
       "hoursAgo": "hours ago",
@@ -235,6 +238,11 @@
       "remaining": "remaining",
       "saving": "Saving...",
       "startingStepCounter": "Starting step counter...",
+      "streakDays": "days in a row",
+      "stepCounterNotAvailable": "Step counter is not available on this device.",
+      "stepCounterPermissionDenied": "Permission to use step counter was denied. Open Settings to grant access.",
+      "stepCounterPermissionDeniedAction": "Open Settings",
+      "stepCounterError": "Error fetching step data.",
       "login": "Log in",
       "createAccount": "Create Account"
     },
@@ -554,7 +562,19 @@
       "somethingWentWrong": "Something went wrong. Please try again later.",
       "pleaseEnterNumber": "Please enter a number",
       "minimum1000": "Daily goal must be at least 1000 steps",
-      "maximum100000": "Daily goal cannot be more than 100,000 steps"
+      "maximum100000": "Daily goal cannot be more than 100,000 steps",
+      "next": "Next",
+      "findFriendsTitle": "Find Friends",
+      "findFriendsSubtitle": "The app is more fun with friends! Search by username to find them.",
+      "searchFriendsPlaceholder": "Search by username...",
+      "skipStep": "Skip",
+      "requestSent": "Sent ✓",
+      "add": "Add",
+      "notificationsTitle": "Stay Motivated",
+      "notificationsSubtitle": "Enable notifications to get reminders about your goals and celebrate achievements!",
+      "enableNotifications": "Enable Notifications 🔔",
+      "notificationsEnabled": "Notifications enabled! 🎉",
+      "skipNotifications": "Not now"
     }
   }
 }

@@ -1,17 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Image } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Image, Linking } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
 import { useWalkTracker } from '../hooks/useWalkTracker';
 import { saveStepData } from '../services/stepService';
-import { checkAllAchievements } from '../services/achievementService';
+import { checkAllAchievements, getCurrentStreak } from '../services/achievementService';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import { isWalkTrackingEnabled } from '../services/walkService';
 import { getUnreadNotificationsCount } from '../services/notificationService';
 import { checkAndCreateAllActivityNotifications } from '../services/activityNotificationService';
 import OnboardingScreen from './OnboardingScreen';
+import LiveWalkCard from '../components/LiveWalkCard';
 import CircularProgress from '../components/CircularProgress';
 import StatisticsView from '../components/StatisticsView';
 import AchievementsView from '../components/AchievementsView';
@@ -28,7 +29,9 @@ interface HomeScreenProps {
 export default function HomeScreen({ navigation }: HomeScreenProps) {
   const { user, signOut } = useAuth();
   const { t, language } = useTranslation();
-  const { stepData, error: stepError } = useStepCounter();
+  const { stepData, error: stepErrorCode } = useStepCounter();
+  const latestStepDataRef = useRef(stepData);
+  const latestDailyGoalRef = useRef<number | null>(null);
   const walkTracker = useWalkTracker(); // Initialize walk tracking
   const [saving, setSaving] = useState(false);
   const [dailyGoal, setDailyGoal] = useState<number | null>(null);
@@ -39,34 +42,45 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
   const [walkTrackingEnabled, setWalkTrackingEnabled] = useState<boolean | null>(null);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
+  const [currentStreak, setCurrentStreak] = useState(0);
 
-  // Save step data to Supabase periodically (for both logged in and anonymous users)
+  // Keep refs updated with latest values so the interval always has fresh data
   useEffect(() => {
-    if (!stepData.isAvailable || stepData.steps === 0) return;
+    latestStepDataRef.current = stepData;
+  }, [stepData]);
+
+  useEffect(() => {
+    latestDailyGoalRef.current = dailyGoal;
+  }, [dailyGoal]);
+
+  // Save step data to Supabase on a fixed 30-second interval.
+  // Using refs so we never restart the interval on every step increment.
+  useEffect(() => {
+    if (!stepData.isAvailable) return;
 
     const saveData = async () => {
+      const { steps, distance, isAvailable } = latestStepDataRef.current;
+      if (!isAvailable || steps === 0) return;
+
       setSaving(true);
       try {
         let savedUserId: string | null = null;
         let savedDeviceId: string | null = null;
 
         if (user) {
-          // Logged in user
-          await saveStepData(user.id, stepData.steps, stepData.distance, null);
+          await saveStepData(user.id, steps, distance, null);
           savedUserId = user.id;
         } else {
-          // Anonymous user - use device_id
           const deviceId = await getDeviceId();
-          await saveStepData(null, stepData.steps, stepData.distance, deviceId);
+          await saveStepData(null, steps, distance, deviceId);
           savedDeviceId = deviceId;
         }
 
-        // Check and award achievements based on step data
         await checkAllAchievements(
           savedUserId,
-          stepData.steps,
-          stepData.distance,
-          dailyGoal,
+          steps,
+          distance,
+          latestDailyGoalRef.current,
           savedDeviceId || undefined
         );
       } catch (err) {
@@ -76,14 +90,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       }
     };
 
-    // Save immediately when steps change
+    // Initial save when pedometer first becomes available or user changes
     saveData();
-
-    // Also save every 30 seconds
     const interval = setInterval(saveData, 30000);
-
     return () => clearInterval(interval);
-  }, [user, stepData.steps, stepData.distance, dailyGoal]);
+  }, [user, stepData.isAvailable]);
 
   // Load walk tracking enabled status
   useEffect(() => {
@@ -318,6 +329,12 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               
               // Reload preferences when screen comes into focus (e.g., language or distance unit changed)
               loadPreferences();
+
+              // Load current streak
+              const id = user?.id || null;
+              getDeviceId().then(deviceId => {
+                getCurrentStreak(id, id ? null : deviceId).then(setCurrentStreak);
+              });
     }, [user, goalLoaded, language, loadPreferences])
   );
   
@@ -481,9 +498,38 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
               </>
             )}
       
-      {stepError && (
+      {/* Live walk map — shown when actively tracking outside home area */}
+      {walkTracker.isTracking &&
+        walkTracker.isOutsideHomeArea &&
+        walkTracker.currentWalk &&
+        walkTracker.currentWalk.coordinates.length >= 2 && (
+          <LiveWalkCard
+            coordinates={walkTracker.currentWalk.coordinates}
+            distance={walkTracker.currentWalk.distance}
+            startTime={walkTracker.currentWalk.startTime}
+            distanceUnit={distanceUnit}
+          />
+        )}
+
+      {stepErrorCode && (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{stepError}</Text>
+          <Text style={styles.errorText}>
+            {stepErrorCode === 'not_available'
+              ? t('screens.home.stepCounterNotAvailable')
+              : stepErrorCode === 'permission_denied'
+              ? t('screens.home.stepCounterPermissionDenied')
+              : t('screens.home.stepCounterError')}
+          </Text>
+          {stepErrorCode === 'permission_denied' && (
+            <TouchableOpacity
+              onPress={() => Linking.openSettings()}
+              style={styles.errorActionButton}
+            >
+              <Text style={styles.errorActionText}>
+                {t('screens.home.stepCounterPermissionDeniedAction')}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -517,6 +563,15 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <Text style={styles.goalTitle}>{t('screens.home.goal')}</Text>
                 <Text style={styles.goalValue}>{currentGoal.toLocaleString()} {t('screens.home.steps')}</Text>
               </View>
+
+              {currentStreak >= 2 && (
+                <View style={styles.streakBadge}>
+                  <Text style={styles.streakEmoji}>🔥</Text>
+                  <Text style={styles.streakText}>
+                    {currentStreak} {t('screens.home.streakDays')}
+                  </Text>
+                </View>
+              )}
             </View>
           ) : (
             <>
@@ -730,11 +785,24 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     marginBottom: 20,
+    alignItems: 'center',
   },
   errorText: {
     color: '#F44336',
     fontSize: 14,
     textAlign: 'center',
+  },
+  errorActionButton: {
+    marginTop: 10,
+    backgroundColor: '#F44336',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  errorActionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   stepContainer: {
     alignItems: 'center',
@@ -777,6 +845,26 @@ const styles = StyleSheet.create({
   goalInfoContainer: {
     marginTop: 20,
     alignItems: 'center',
+  },
+  streakBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    backgroundColor: '#FFF3E0',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+    gap: 6,
+  },
+  streakEmoji: {
+    fontSize: 18,
+  },
+  streakText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E65100',
   },
   goalTitle: {
     fontSize: 14,

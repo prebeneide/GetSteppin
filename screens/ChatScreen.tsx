@@ -181,13 +181,6 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
       if (error) {
         console.error('Error loading messages:', error);
       } else {
-        console.log('Loaded messages:', data?.length || 0);
-        // Log messages with images for debugging
-        (data || []).forEach((msg, idx) => {
-          if (msg.image_url) {
-            console.log(`Message ${idx} has image:`, msg.image_url);
-          }
-        });
         setMessages(data || []);
         // Scroll to bottom after loading
         setTimeout(() => {
@@ -263,8 +256,6 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
         console.error('Error sending message:', error);
         Alert.alert(t('common.error'), t('screens.chat.couldNotSend'));
       } else {
-        console.log('Message sent successfully:', data);
-        console.log('Message image_url:', data?.image_url);
         setMessageText('');
         setSelectedImageUri(null);
         if (data) {

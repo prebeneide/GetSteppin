@@ -414,6 +414,60 @@ export const checkGoalAchievement = async (
 };
 
 /**
+ * Get the current streak (consecutive days with steps > 0) for a user.
+ * Returns the number of consecutive days from today going backwards.
+ */
+export const getCurrentStreak = async (
+  userId: string | null,
+  deviceId?: string | null
+): Promise<number> => {
+  try {
+    if (!deviceId && !userId) {
+      deviceId = await getDeviceId();
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 365);
+
+    let query = supabase
+      .from('step_data')
+      .select('date')
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', today.toISOString().split('T')[0])
+      .gt('steps', 0)
+      .order('date', { ascending: false });
+
+    if (userId) {
+      query = query.eq('user_id', userId);
+    } else {
+      query = query.eq('device_id', deviceId!).is('user_id', null);
+    }
+
+    const { data: stepData, error } = await query;
+    if (error || !stepData || stepData.length === 0) return 0;
+
+    const datesWithData = new Set(stepData.map((d: { date: string }) => d.date));
+    let streak = 0;
+    for (let i = 0; i < 365; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      const dateStr = checkDate.toISOString().split('T')[0];
+      if (datesWithData.has(dateStr)) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  } catch (err) {
+    console.error('Error in getCurrentStreak:', err);
+    return 0;
+  }
+};
+
+/**
  * Check and award streak achievement (🔥)
  * Streak is based on consecutive days the user has opened the app (and app has recorded steps)
  * If there's a gap (a full day without app usage), the streak resets to 0
@@ -1276,6 +1330,67 @@ export const checkAllAchievements = async (
     await checkStreakAchievement(userId, deviceId || undefined);
   } catch (err) {
     console.error('Error in checkAllAchievements:', err);
+  }
+};
+
+// ── Feed activity ─────────────────────────────────────────────────────────────
+
+export interface FriendActivity {
+  type: 'achievement';
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  achievement_emoji: string;
+  achievement_name: string;
+  earned_at: string;
+}
+
+/**
+ * Get friends' recent achievements from the last 7 days, sorted newest first.
+ */
+export const getFriendsRecentActivities = async (
+  friendIds: string[]
+): Promise<{ data: FriendActivity[] | null; error: any }> => {
+  if (friendIds.length === 0) return { data: [], error: null };
+
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data, error } = await supabase
+      .from('user_achievements')
+      .select(`
+        user_id,
+        last_earned_at,
+        achievement_types (
+          emoji,
+          name
+        ),
+        user_profiles!inner (
+          username,
+          avatar_url
+        )
+      `)
+      .in('user_id', friendIds)
+      .gte('last_earned_at', sevenDaysAgo.toISOString())
+      .order('last_earned_at', { ascending: false })
+      .limit(15);
+
+    if (error) return { data: null, error };
+
+    const activities: FriendActivity[] = (data || []).map((item: any) => ({
+      type: 'achievement',
+      user_id: item.user_id,
+      username: item.user_profiles?.username || '',
+      avatar_url: item.user_profiles?.avatar_url || null,
+      achievement_emoji: item.achievement_types?.emoji || '🏆',
+      achievement_name: item.achievement_types?.name || '',
+      earned_at: item.last_earned_at,
+    }));
+
+    return { data: activities, error: null };
+  } catch (err) {
+    return { data: null, error: err };
   }
 };
 

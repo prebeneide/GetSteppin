@@ -227,6 +227,9 @@
       "trackingWaiting": "Tracking aktiv (venter på bevegelse)",
       "trackingPermission": "Tracking venter på tilgang",
       "gpsNotActivated": "GPS-sporing ikke aktivert - Gå til Innstillinger",
+      "liveWalkTitle": "Aktiv tur",
+      "duration": "Varighet",
+      "paceUnit": "min/km",
       "starting": "Starter...",
       "minutesAgo": "min siden",
       "hoursAgo": "timer siden",
@@ -235,6 +238,11 @@
       "remaining": "igjen",
       "saving": "Lagrer...",
       "startingStepCounter": "Starter skrittteller...",
+      "streakDays": "dager på rad",
+      "stepCounterNotAvailable": "Skrittteller er ikke tilgjengelig på denne enheten.",
+      "stepCounterPermissionDenied": "Tillatelse til skrittteller ble ikke gitt. Åpne Innstillinger for å gi tilgang.",
+      "stepCounterPermissionDeniedAction": "Åpne Innstillinger",
+      "stepCounterError": "Feil ved henting av skrittdata.",
       "login": "Logg inn",
       "createAccount": "Opprett konto"
     },
@@ -550,7 +558,19 @@
       "somethingWentWrong": "Noe gikk galt. Prøv igjen senere.",
       "pleaseEnterNumber": "Vennligst skriv inn et tall",
       "minimum1000": "Daglig mål må være minst 1000 skritt",
-      "maximum100000": "Daglig mål kan ikke være mer enn 100,000 skritt"
+      "maximum100000": "Daglig mål kan ikke være mer enn 100,000 skritt",
+      "next": "Neste",
+      "findFriendsTitle": "Finn venner",
+      "findFriendsSubtitle": "Appen er morsomst med venner! Søk etter brukernavn for å finne dem.",
+      "searchFriendsPlaceholder": "Søk etter brukernavn...",
+      "skipStep": "Hopp over",
+      "requestSent": "Sendt ✓",
+      "add": "Legg til",
+      "notificationsTitle": "Hold deg motivert",
+      "notificationsSubtitle": "Aktiver varslinger for å få påminnelser om dine mål og feire prestasjoner!",
+      "enableNotifications": "Aktiver varslinger 🔔",
+      "notificationsEnabled": "Varslinger aktivert! 🎉",
+      "skipNotifications": "Ikke nå"
     }
   }
 }

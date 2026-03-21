@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { getFeedPosts, PostWithDetails, likePost, unlikePost } from '../services/postService';
 import { getFriends } from '../services/friendService';
+import { getFriendsRecentActivities, FriendActivity } from '../services/achievementService';
 import AlertModal from '../components/AlertModal';
 import MediaGallery from '../components/MediaGallery';
 import LikesModal from '../components/LikesModal';
@@ -25,10 +26,14 @@ interface FeedScreenProps {
   navigation: any;
 }
 
+type FeedItem =
+  | { kind: 'post'; data: PostWithDetails }
+  | { kind: 'activity'; data: FriendActivity };
+
 export default function FeedScreen({ navigation }: FeedScreenProps) {
   const { user } = useAuth();
   const { t, language } = useTranslation();
-  const [posts, setPosts] = useState<PostWithDetails[]>([]);
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
@@ -41,16 +46,15 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
 
   useEffect(() => {
     if (user) {
-      loadPosts();
+      loadFeed();
       loadPreferences();
     }
   }, [user]);
 
-  // Reload posts when screen comes into focus (e.g., after adding a comment)
   useFocusEffect(
     React.useCallback(() => {
       if (user) {
-        loadPosts();
+        loadFeed();
         loadPreferences();
       }
     }, [user])
@@ -65,12 +69,11 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     }
   };
 
-  const loadPosts = async () => {
+  const loadFeed = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
-      // Check if user has friends
       const { data: friends, error: friendsError } = await getFriends(user.id);
       if (friendsError) {
         console.error('Error loading friends:', friendsError);
@@ -79,12 +82,28 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
         setHasFriends((friends || []).length > 0);
       }
 
-      const { data, error } = await getFeedPosts(user.id, 20, 0);
+      const friendIds = (friends || []).map(f => f.id);
 
-      if (error) throw error;
-      setPosts(data || []);
+      const [postsResult, activitiesResult] = await Promise.all([
+        getFeedPosts(user.id, 20, 0),
+        friendIds.length > 0 ? getFriendsRecentActivities(friendIds) : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      if (postsResult.error) throw postsResult.error;
+
+      const posts: FeedItem[] = (postsResult.data || []).map(p => ({ kind: 'post', data: p }));
+      const activities: FeedItem[] = (activitiesResult.data || []).map(a => ({ kind: 'activity', data: a }));
+
+      // Merge and sort by date descending
+      const merged = [...posts, ...activities].sort((a, b) => {
+        const dateA = a.kind === 'post' ? a.data.created_at : a.data.earned_at;
+        const dateB = b.kind === 'post' ? b.data.created_at : b.data.earned_at;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+
+      setFeedItems(merged);
     } catch (err) {
-      console.error('Error loading posts:', err);
+      console.error('Error loading feed:', err);
       setAlertMessage(t('screens.feed.couldNotLoad'));
       setAlertVisible(true);
     } finally {
@@ -94,7 +113,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadPosts();
+    await loadFeed();
     setRefreshing(false);
   };
 
@@ -108,18 +127,20 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       } else {
         await likePost(postId, user.id);
       }
-      
-      // Update local state
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post.id === postId
+
+      setFeedItems(prev =>
+        prev.map(item =>
+          item.kind === 'post' && item.data.id === postId
             ? {
-                ...post,
-                is_liked: !post.is_liked,
-                has_user_liked: !post.has_user_liked,
-                likes_count: currentlyLiked ? post.likes_count - 1 : post.likes_count + 1,
+                ...item,
+                data: {
+                  ...item.data,
+                  is_liked: !item.data.is_liked,
+                  has_user_liked: !item.data.has_user_liked,
+                  likes_count: currentlyLiked ? item.data.likes_count - 1 : item.data.likes_count + 1,
+                },
               }
-            : post
+            : item
         )
       );
     } catch (err) {
@@ -157,14 +178,10 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     }
   };
 
-  // formatDistance is now imported from lib/formatters.ts
-
   const formatDuration = (minutes: number): string => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    if (hours > 0) {
-      return `${hours}t ${mins}m`;
-    }
+    if (hours > 0) return `${hours}t ${mins}m`;
     return `${mins}m`;
   };
 
@@ -172,10 +189,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Text style={styles.backButtonText}>← {t('common.back')}</Text>
           </TouchableOpacity>
         </View>
@@ -189,10 +203,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← {t('common.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{t('screens.feed.title')}</Text>
@@ -202,154 +213,181 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#1ED760" />
         </View>
-      ) : posts.length === 0 ? (
+      ) : feedItems.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>📰</Text>
           <Text style={styles.emptyText}>
-            {hasFriends === false
-              ? t('screens.feed.noFriends')
-              : t('screens.feed.noPosts')}
+            {hasFriends === false ? t('screens.feed.noFriends') : t('screens.feed.noPosts')}
           </Text>
           <Text style={styles.emptySubtext}>
-            {hasFriends === false
-              ? t('screens.feed.noFriendsSubtext')
-              : t('screens.feed.noPostsSubtext')}
+            {hasFriends === false ? t('screens.feed.noFriendsSubtext') : t('screens.feed.noPostsSubtext')}
           </Text>
+          {hasFriends === false && (
+            <TouchableOpacity
+              style={styles.addFriendsButton}
+              onPress={() => navigation.navigate('AddFriend')}
+            >
+              <Text style={styles.addFriendsButtonText}>
+                {language === 'en' ? 'Find Friends' : 'Finn venner'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {posts.map((post) => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.postCard}
-              onPress={() => {
-                if (post.walk) {
-                  navigation.navigate('PostWalkDetail', { postId: post.id });
-                }
-              }}
-              activeOpacity={0.95}
-            >
-              {/* Post Header */}
-              <View style={styles.postHeader}>
-                <View style={styles.userInfo}>
-                  {post.avatar_url ? (
-                    <Image
-                      source={{ uri: post.avatar_url }}
-                      style={styles.avatar}
-                    />
-                  ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Text style={styles.avatarText}>
-                        {post.username.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                  <View>
-                    <Text style={styles.username}>{post.username}</Text>
-                    <Text style={styles.postDate}>{formatDate(post.created_at)}</Text>
+          {feedItems.map((item, index) => {
+            if (item.kind === 'activity') {
+              const act = item.data;
+              return (
+                <View key={`activity-${act.user_id}-${act.earned_at}-${index}`} style={styles.activityCard}>
+                  <View style={styles.activityLeft}>
+                    {act.avatar_url ? (
+                      <Image source={{ uri: act.avatar_url }} style={styles.activityAvatar} />
+                    ) : (
+                      <View style={styles.activityAvatarPlaceholder}>
+                        <Text style={styles.activityAvatarText}>
+                          {(act.username || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.activityBody}>
+                    <Text style={styles.activityText}>
+                      <Text style={styles.activityUsername}>{act.username}</Text>
+                      {' '}
+                      {language === 'en' ? 'earned' : 'fikk'}
+                      {' '}
+                      <Text style={styles.activityBadge}>{act.achievement_emoji} {act.achievement_name}</Text>
+                    </Text>
+                    <Text style={styles.activityTime}>{formatDate(act.earned_at)}</Text>
                   </View>
                 </View>
-              </View>
+              );
+            }
 
-              {/* Walk Info */}
-              {post.walk && (
-                <View style={styles.walkInfo}>
-                  <Text style={styles.walkTitle}>
-                    👣 {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
-                  </Text>
-                  <Text style={styles.walkStats}>
-                    {post.display_settings?.show_duration !== false && formatDuration(post.walk.duration_minutes)}
-                    {post.display_settings?.show_duration !== false && post.walk.steps > 0 && ' • '}
-                    {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} ${t('common.steps')}`}
-                  </Text>
+            const post = item.data;
+            return (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.postCard}
+                onPress={() => {
+                  if (post.walk) {
+                    navigation.navigate('PostWalkDetail', { postId: post.id });
+                  }
+                }}
+                activeOpacity={0.95}
+              >
+                {/* Post Header */}
+                <View style={styles.postHeader}>
+                  <View style={styles.userInfo}>
+                    {post.avatar_url ? (
+                      <Image source={{ uri: post.avatar_url }} style={styles.avatar} />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <Text style={styles.avatarText}>
+                          {(post.username || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                    <View>
+                      <Text style={styles.username}>{post.username}</Text>
+                      <Text style={styles.postDate}>{formatDate(post.created_at)}</Text>
+                    </View>
+                  </View>
                 </View>
-              )}
 
-              {/* Post Content */}
-              {post.content && (
-                <Text style={styles.postContent}>{post.content}</Text>
-              )}
+                {/* Walk Info */}
+                {post.walk && (
+                  <View style={styles.walkInfo}>
+                    <Text style={styles.walkTitle}>
+                      👣 {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
+                    </Text>
+                    <Text style={styles.walkStats}>
+                      {post.display_settings?.show_duration !== false && formatDuration(post.walk.duration_minutes)}
+                      {post.display_settings?.show_duration !== false && post.walk.steps > 0 && ' • '}
+                      {post.walk.steps > 0 && `${post.walk.steps.toLocaleString()} ${t('common.steps')}`}
+                    </Text>
+                  </View>
+                )}
 
-              {/* Media Gallery (images + map in same slider, like Strava) */}
-              {(() => {
-                const imageUrls = getAllImageUrls(post);
-                const hasImages = imageUrls.length > 0;
-                const hasMap = post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0;
-                
-                if (hasImages || hasMap) {
-                  return (
-                    <MediaGallery
-                      images={imageUrls}
-                      coordinates={post.walk?.route_coordinates || undefined}
-                      primaryImageIndex={post.primary_image_index || 0}
-                      mapPosition={post.map_position !== undefined ? post.map_position : -1}
-                      height={300}
-                    />
-                  );
-                }
-                return null;
-              })()}
+                {/* Post Content */}
+                {post.content && (
+                  <Text style={styles.postContent}>{post.content}</Text>
+                )}
 
-              {/* Post Actions */}
-              <View style={styles.postActions}>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleLike(post.id, post.is_liked);
-                  }}
-                  disabled={likingPostId === post.id}
-                  onLongPress={(e) => {
-                    e.stopPropagation();
-                    if (post.likes_count > 0) {
-                      setSelectedPostId(post.id);
-                      setLikesModalVisible(true);
-                    }
-                  }}
-                >
-                  <Text style={[
-                    styles.actionText,
-                    post.is_liked && styles.actionTextLiked
-                  ]}>
-                    {post.is_liked ? '❤️' : '🤍'} {post.likes_count || 0}
-                  </Text>
-                </TouchableOpacity>
-                {post.likes_count > 0 && (
+                {/* Media Gallery */}
+                {(() => {
+                  const imageUrls = getAllImageUrls(post);
+                  const hasImages = imageUrls.length > 0;
+                  const hasMap = post.walk && post.walk.route_coordinates && post.walk.route_coordinates.length > 0;
+                  if (hasImages || hasMap) {
+                    return (
+                      <MediaGallery
+                        images={imageUrls}
+                        coordinates={post.walk?.route_coordinates || undefined}
+                        primaryImageIndex={post.primary_image_index || 0}
+                        mapPosition={post.map_position !== undefined ? post.map_position : -1}
+                        height={300}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Post Actions */}
+                <View style={styles.postActions}>
                   <TouchableOpacity
-                    style={styles.likesCountButton}
+                    style={styles.actionButton}
                     onPress={(e) => {
                       e.stopPropagation();
-                      setSelectedPostId(post.id);
-                      setLikesModalVisible(true);
+                      handleLike(post.id, post.is_liked);
+                    }}
+                    disabled={likingPostId === post.id}
+                    onLongPress={(e) => {
+                      e.stopPropagation();
+                      if (post.likes_count > 0) {
+                        setSelectedPostId(post.id);
+                        setLikesModalVisible(true);
+                      }
                     }}
                   >
-                    <Text style={styles.likesCountText}>
-                        {post.likes_count === 1 
-                        ? t('screens.feed.onePersonLiked') 
-                        : `${post.likes_count} ${t('screens.feed.peopleLiked')}`}
+                    <Text style={[styles.actionText, post.is_liked && styles.actionTextLiked]}>
+                      {post.is_liked ? '❤️' : '🤍'} {post.likes_count || 0}
                     </Text>
                   </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    navigation.navigate('PostDetail', { postId: post.id });
-                  }}
-                >
-                  <Text style={styles.actionText}>
-                    💬 {post.comments_count || 0}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          ))}
+                  {post.likes_count > 0 && (
+                    <TouchableOpacity
+                      style={styles.likesCountButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setSelectedPostId(post.id);
+                        setLikesModalVisible(true);
+                      }}
+                    >
+                      <Text style={styles.likesCountText}>
+                        {post.likes_count === 1
+                          ? t('screens.feed.onePersonLiked')
+                          : `${post.likes_count} ${t('screens.feed.peopleLiked')}`}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      navigation.navigate('PostDetail', { postId: post.id });
+                    }}
+                  >
+                    <Text style={styles.actionText}>💬 {post.comments_count || 0}</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
 
@@ -367,9 +405,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
           setLikesModalVisible(false);
           setSelectedPostId(null);
         }}
-        onUserPress={(userId: string) => {
-          // Navigate to user profile if needed
-          // For now, just close the modal
+        onUserPress={() => {
           setLikesModalVisible(false);
           setSelectedPostId(null);
         }}
@@ -426,17 +462,84 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
+  },
+  addFriendsButton: {
+    backgroundColor: '#1ED760',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  addFriendsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
   },
+  // Activity card
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0faf4',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#d0edd8',
+  },
+  activityLeft: {
+    marginRight: 12,
+  },
+  activityAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  activityAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1ED760',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  activityAvatarText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  activityBody: {
+    flex: 1,
+  },
+  activityText: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+  },
+  activityUsername: {
+    fontWeight: '700',
+    color: '#222',
+  },
+  activityBadge: {
+    fontWeight: '600',
+    color: '#1a9e4a',
+  },
+  activityTime: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  // Walk post card
   postCard: {
     backgroundColor: '#f9f9f9',
     borderRadius: 12,
@@ -502,24 +605,10 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 8,
   },
-  viewWalkButton: {
-    alignSelf: 'flex-start',
-  },
-  viewWalkText: {
-    fontSize: 14,
-    color: '#1ED760',
-    fontWeight: '600',
-  },
   postContent: {
     fontSize: 16,
     color: '#333',
     lineHeight: 22,
-    marginBottom: 12,
-  },
-  postImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
     marginBottom: 12,
   },
   postActions: {
@@ -550,4 +639,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

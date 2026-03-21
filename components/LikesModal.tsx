@@ -135,7 +135,7 @@ export default function LikesModal({ visible, postId, commentId, onClose, onUser
                       ) : (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarText}>
-                            {like.username.charAt(0).toUpperCase()}
+                            {(like.username || '?').charAt(0).toUpperCase()}
                           </Text>
                         </View>
                       )}

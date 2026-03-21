@@ -14,6 +14,112 @@ import { getDeviceId } from '../lib/deviceId';
 import { getPreliminaryAchievements } from '../services/achievementService';
 import { useTranslation, t as translate, Language } from '../lib/i18n';
 
+// Module-level lookup tables — defined once, reused everywhere in this file
+const EMOJI_TO_NAME_KEY: Record<string, string> = {
+  '🥇': 'screens.achievements.dailyGoldPermanent',
+  '🥈': 'screens.achievements.dailySilverPermanent',
+  '🥉': 'screens.achievements.dailyBronzePermanent',
+  '🏆': 'screens.achievements.weeklyWinner',
+  '👑': 'screens.achievements.monthlyWinner',
+  '🍒': 'screens.achievements.cherry',
+  '🍑': 'screens.achievements.peach',
+  '🎯': 'screens.achievements.milestone',
+  '✅': 'screens.achievements.dailyGoal',
+  '⭐': 'screens.achievements.top5Percent',
+  '🔥': 'screens.achievements.streak',
+  '🤝': 'screens.achievements.teamplayer',
+  '🚀': 'screens.achievements.rocket',
+  '💯': 'screens.achievements.hundred',
+  '🎊': 'screens.achievements.party',
+  '🌙': 'screens.achievements.nightOwl',
+  '🌅': 'screens.achievements.earlyBird',
+  '🎁': 'screens.achievements.surprise',
+  '🏃': 'screens.achievements.run5km',
+  '🏃‍♀️': 'screens.achievements.run10km',
+  '🏁': 'screens.achievements.halfMarathon',
+  '🏃‍♂️': 'screens.achievements.marathon',
+};
+
+const EMOJI_TO_DESC_KEY: Record<string, string> = {
+  '🥇': 'screens.achievements.firstPlaceYesterday',
+  '🥈': 'screens.achievements.secondPlaceYesterday',
+  '🥉': 'screens.achievements.thirdPlaceYesterday',
+  '🏆': 'screens.achievements.firstPlaceLastWeek',
+  '👑': 'screens.achievements.firstPlaceLastMonth',
+  '🍒': 'screens.achievements.cherryDescription',
+  '🍑': 'screens.achievements.peachDescription',
+  '🎯': 'screens.achievements.milestoneDescription',
+  '✅': 'screens.achievements.dailyGoalDescription',
+  '⭐': 'screens.achievements.top5PercentDescription',
+  '🔥': 'screens.achievements.streakDescription',
+  '🤝': 'screens.achievements.teamplayerDescription',
+  '🚀': 'screens.achievements.rocketDescription',
+  '💯': 'screens.achievements.hundredDescription',
+  '🎊': 'screens.achievements.partyDescription',
+  '🌙': 'screens.achievements.nightOwlDescription',
+  '🌅': 'screens.achievements.earlyBirdDescription',
+  '🎁': 'screens.achievements.surpriseDescription',
+  '🏃': 'screens.achievements.run5kmDescription',
+  '🏃‍♀️': 'screens.achievements.run10kmDescription',
+  '🏁': 'screens.achievements.halfMarathonDescription',
+  '🏃‍♂️': 'screens.achievements.marathonDescription',
+};
+
+const DB_NAME_TO_KEY: Record<string, string> = {
+  'Kirsebær': 'cherry',
+  'Fersken': 'peach',
+  'Milestone': 'milestone',
+  'Dagens Mål': 'dailyGoal',
+  'Pokal': 'weeklyWinner',
+  'Ukesvinner': 'weeklyWinner',
+  'Topp 5%': 'top5Percent',
+  'Streak': 'streak',
+  'Teamplayer': 'teamplayer',
+  'Rakett': 'rocket',
+  'Hundre': 'hundred',
+  'Fest': 'party',
+  'Nattugle': 'nightOwl',
+  'Morgenfugl': 'earlyBird',
+  'Overraskelse': 'surprise',
+  '5 km løpt': 'run5km',
+  '10 km løpt': 'run10km',
+  'Halvmaraton løpt': 'halfMarathon',
+  'Maraton løpt': 'marathon',
+  'Dagens gull': 'dailyGoldPermanent',
+  'Dagens sølv': 'dailySilverPermanent',
+  'Dagens bronse': 'dailyBronzePermanent',
+};
+
+const DB_DESC_TO_KEY: Record<string, string> = {
+  'Gått 1000 skritt': 'cherryDescription',
+  'Gått 10000 skritt': 'peachDescription',
+  'Når større milepæler (50km, 100km, 500km osv)': 'milestoneDescription',
+  'Klart dagens skrittmål': 'dailyGoalDescription',
+  'Vunnet over alle venner i dag': 'firstPlaceLastWeek',
+  '1. plass blant venner i dag': 'firstPlaceTodayPreliminary',
+  '2. plass blant venner i dag': 'secondPlaceTodayPreliminary',
+  '3. plass blant venner i dag': 'thirdPlaceTodayPreliminary',
+  '1. plass blant venner i går': 'firstPlaceYesterday',
+  '2. plass blant venner i går': 'secondPlaceYesterday',
+  '3. plass blant venner i går': 'thirdPlaceYesterday',
+  '1. plass blant venner forrige uke': 'firstPlaceLastWeek',
+  '1. plass blant venner forrige måned': 'firstPlaceLastMonth',
+  'Topp ukesvinner': 'firstPlaceLastWeek',
+  'Topp 5% av alle brukere': 'top5PercentDescription',
+  'Daglig strek på rad': 'streakDescription',
+  'Oppmuntret venner': 'teamplayerDescription',
+  'Over 20000 skritt på én dag': 'rocketDescription',
+  'Nøyaktig 100 skritt': 'hundredDescription',
+  '10 000 skritt på én dag': 'partyDescription',
+  'Over 1000 skritt etter kl 22': 'nightOwlDescription',
+  'Over 5000 skritt før kl 10': 'earlyBirdDescription',
+  '10 000 skritt før lunsj': 'surpriseDescription',
+  'Løpt/jogget 5 km på én dag': 'run5kmDescription',
+  'Løpt/jogget 10 km på én dag': 'run10kmDescription',
+  'Løpt halvmaraton (21,1 km) på én dag': 'halfMarathonDescription',
+  'Løpt maraton (42,2 km) på én dag': 'marathonDescription',
+};
+
 interface Achievement {
   id: string;
   emoji: string;
@@ -39,15 +145,9 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
   const [error, setError] = useState<string | null>(null);
   const [showAllModal, setShowAllModal] = useState(false);
 
-  // Load achievements function - uses translate() directly with current language
-  // This ensures translations are always correct regardless of when the function is called
-  // We don't use emojiNameMap/emojiDescMap anymore - we translate directly based on current language
   const loadAchievements = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
-    console.log('[AchievementsView] loadAchievements called - isLoggedIn:', isLoggedIn, 'userId:', userId);
-    
     try {
       let query = supabase
         .from('user_achievements')
@@ -66,10 +166,8 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
         `);
 
       if (isLoggedIn && userId) {
-        // Logged in user - filter by user_id
         query = query.eq('user_id', userId);
       } else {
-        // Anonymous user - filter by device_id
         const deviceId = await getDeviceId();
         query = query.eq('device_id', deviceId).is('user_id', null);
       }
@@ -80,228 +178,33 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
         console.error('Error fetching achievements:', fetchError);
         setError(translate('screens.achievements.couldNotLoad', language));
       } else {
-        // Transform the data to flatten achievement_types
         const transformed = (data || []).map((item: any) => {
           const emoji: string = item.achievement_types?.emoji || '';
           const lastEarnedAt = item.last_earned_at as string;
           const earnedDate = lastEarnedAt ? new Date(lastEarnedAt) : null;
 
-          // ALWAYS use translation - never show database name directly
-          // Strategy: Always use database name mapping as primary source for translation
-          // This ensures that even if emoji doesn't match, we still get the correct translation
-          let name = '';
+          // Resolve name: try DB name map first, fall back to emoji map
           const dbName = item.achievement_types?.name || '';
-          
-          // First, try to find translation by database name (most reliable)
-          if (dbName) {
-            const nameKeyMap: { [key: string]: string } = {
-              'Kirsebær': 'cherry',
-              'Fersken': 'peach',
-              'Milestone': 'milestone',
-              'Dagens Mål': 'dailyGoal',
-              'Pokal': 'weeklyWinner',
-              'Ukesvinner': 'weeklyWinner',
-              'Topp 5%': 'top5Percent',
-              'Streak': 'streak',
-              'Teamplayer': 'teamplayer',
-              'Rakett': 'rocket',
-              'Hundre': 'hundred',
-              'Fest': 'party',
-              'Nattugle': 'nightOwl',
-              'Morgenfugl': 'earlyBird',
-              'Overraskelse': 'surprise',
-              '5 km løpt': 'run5km',
-              '10 km løpt': 'run10km',
-              'Halvmaraton løpt': 'halfMarathon',
-              'Maraton løpt': 'marathon',
-              'Dagens gull': 'dailyGoldPermanent',
-              'Dagens sølv': 'dailySilverPermanent',
-              'Dagens bronse': 'dailyBronzePermanent',
-            };
-            const key = nameKeyMap[dbName];
-            if (key) {
-              const translationKey = `screens.achievements.${key}`;
-              name = translate(translationKey, language);
-            } else {
-              // If database name not found, try emoji map as fallback - use translate directly with current language
-              const normalizedEmoji = emoji.trim();
-              // Map emoji to translation key and translate directly
-              const emojiToKey: { [key: string]: string } = {
-                '🥇': 'screens.achievements.dailyGoldPermanent',
-                '🥈': 'screens.achievements.dailySilverPermanent',
-                '🥉': 'screens.achievements.dailyBronzePermanent',
-                '🏆': 'screens.achievements.weeklyWinner',
-                '👑': 'screens.achievements.monthlyWinner',
-                '🍒': 'screens.achievements.cherry',
-                '🍑': 'screens.achievements.peach',
-                '🎯': 'screens.achievements.milestone',
-                '✅': 'screens.achievements.dailyGoal',
-                '⭐': 'screens.achievements.top5Percent',
-                '🔥': 'screens.achievements.streak',
-                '🤝': 'screens.achievements.teamplayer',
-                '🚀': 'screens.achievements.rocket',
-                '💯': 'screens.achievements.hundred',
-                '🎊': 'screens.achievements.party',
-                '🌙': 'screens.achievements.nightOwl',
-                '🌅': 'screens.achievements.earlyBird',
-                '🎁': 'screens.achievements.surprise',
-                '🏃': 'screens.achievements.run5km',
-                '🏃‍♀️': 'screens.achievements.run10km',
-                '🏁': 'screens.achievements.halfMarathon',
-                '🏃‍♂️': 'screens.achievements.marathon',
-              };
-              const translationKey = emojiToKey[normalizedEmoji] || emojiToKey[emoji];
-              if (translationKey) {
-                name = translate(translationKey, language);
-              } else {
-                console.error('[AchievementsView] Translation not found for achievement name:', dbName, 'emoji:', emoji);
-                name = dbName; // Fallback to database name if no translation found
-              }
-            }
+          let name = '';
+          const nameShortKey = DB_NAME_TO_KEY[dbName];
+          if (nameShortKey) {
+            name = translate(`screens.achievements.${nameShortKey}`, language);
           } else {
-            // If no database name, try emoji map - use translate directly with current language
-            const normalizedEmoji = emoji.trim();
-            const emojiToKey: { [key: string]: string } = {
-              '🥇': 'screens.achievements.dailyGoldPermanent',
-              '🥈': 'screens.achievements.dailySilverPermanent',
-              '🥉': 'screens.achievements.dailyBronzePermanent',
-              '🏆': 'screens.achievements.weeklyWinner',
-              '👑': 'screens.achievements.monthlyWinner',
-              '🍒': 'screens.achievements.cherry',
-              '🍑': 'screens.achievements.peach',
-              '🎯': 'screens.achievements.milestone',
-              '✅': 'screens.achievements.dailyGoal',
-              '⭐': 'screens.achievements.top5Percent',
-              '🔥': 'screens.achievements.streak',
-              '🤝': 'screens.achievements.teamplayer',
-              '🚀': 'screens.achievements.rocket',
-              '💯': 'screens.achievements.hundred',
-              '🎊': 'screens.achievements.party',
-              '🌙': 'screens.achievements.nightOwl',
-              '🌅': 'screens.achievements.earlyBird',
-              '🎁': 'screens.achievements.surprise',
-              '🏃': 'screens.achievements.run5km',
-              '🏃‍♀️': 'screens.achievements.run10km',
-              '🏁': 'screens.achievements.halfMarathon',
-              '🏃‍♂️': 'screens.achievements.marathon',
-            };
-            const translationKey = emojiToKey[normalizedEmoji] || emojiToKey[emoji];
-            if (translationKey) {
-              name = translate(translationKey, language);
-            } else {
-              name = '';
-            }
+            const nameKey = EMOJI_TO_NAME_KEY[emoji.trim()] || EMOJI_TO_NAME_KEY[emoji];
+            name = nameKey ? translate(nameKey, language) : dbName;
           }
-          
-          // ALWAYS use translation - never show database description directly
-          // Strategy: Always use database description mapping as primary source for translation
-          let baseDesc: string | null = null;
+
+          // Resolve description: try DB desc map first, fall back to emoji map
           const dbDesc = item.achievement_types?.description || '';
-          
-          // First, try to find translation by database description (most reliable)
-          if (dbDesc) {
-            const descKeyMap: { [key: string]: string } = {
-              'Gått 1000 skritt': 'cherryDescription',
-              'Gått 10000 skritt': 'peachDescription',
-              'Når større milepæler (50km, 100km, 500km osv)': 'milestoneDescription',
-              'Klart dagens skrittmål': 'dailyGoalDescription',
-              'Vunnet over alle venner i dag': 'firstPlaceLastWeek',
-              '1. plass blant venner i dag': 'firstPlaceTodayPreliminary',
-              '2. plass blant venner i dag': 'secondPlaceTodayPreliminary',
-              '3. plass blant venner i dag': 'thirdPlaceTodayPreliminary',
-              '1. plass blant venner i går': 'firstPlaceYesterday',
-              '2. plass blant venner i går': 'secondPlaceYesterday',
-              '3. plass blant venner i går': 'thirdPlaceYesterday',
-              '1. plass blant venner forrige uke': 'firstPlaceLastWeek',
-              '1. plass blant venner forrige måned': 'firstPlaceLastMonth',
-              'Topp ukesvinner': 'firstPlaceLastWeek',
-              'Topp 5% av alle brukere': 'top5PercentDescription',
-              'Daglig strek på rad': 'streakDescription',
-              'Oppmuntret venner': 'teamplayerDescription',
-              'Over 20000 skritt på én dag': 'rocketDescription',
-              'Nøyaktig 100 skritt': 'hundredDescription',
-              '10 000 skritt på én dag': 'partyDescription',
-              'Over 1000 skritt etter kl 22': 'nightOwlDescription',
-              'Over 5000 skritt før kl 10': 'earlyBirdDescription',
-              '10 000 skritt før lunsj': 'surpriseDescription',
-              'Løpt/jogget 5 km på én dag': 'run5kmDescription',
-              'Løpt/jogget 10 km på én dag': 'run10kmDescription',
-              'Løpt halvmaraton (21,1 km) på én dag': 'halfMarathonDescription',
-              'Løpt maraton (42,2 km) på én dag': 'marathonDescription',
-            };
-            const key = descKeyMap[dbDesc];
-            if (key) {
-              const translationKey = `screens.achievements.${key}`;
-              baseDesc = translate(translationKey, language);
-            } else {
-              // If database description not found, try emoji map as fallback - use translate directly with current language
-              const normalizedEmoji = emoji.trim();
-              const emojiToDescKey: { [key: string]: string } = {
-                '🥇': 'screens.achievements.firstPlaceYesterday',
-                '🥈': 'screens.achievements.secondPlaceYesterday',
-                '🥉': 'screens.achievements.thirdPlaceYesterday',
-                '🏆': 'screens.achievements.firstPlaceLastWeek',
-                '👑': 'screens.achievements.firstPlaceLastMonth',
-                '🍒': 'screens.achievements.cherryDescription',
-                '🍑': 'screens.achievements.peachDescription',
-                '🎯': 'screens.achievements.milestoneDescription',
-                '✅': 'screens.achievements.dailyGoalDescription',
-                '⭐': 'screens.achievements.top5PercentDescription',
-                '🔥': 'screens.achievements.streakDescription',
-                '🤝': 'screens.achievements.teamplayerDescription',
-                '🚀': 'screens.achievements.rocketDescription',
-                '💯': 'screens.achievements.hundredDescription',
-                '🎊': 'screens.achievements.partyDescription',
-                '🌙': 'screens.achievements.nightOwlDescription',
-                '🌅': 'screens.achievements.earlyBirdDescription',
-                '🎁': 'screens.achievements.surpriseDescription',
-                '🏃': 'screens.achievements.run5kmDescription',
-                '🏃‍♀️': 'screens.achievements.run10kmDescription',
-                '🏁': 'screens.achievements.halfMarathonDescription',
-                '🏃‍♂️': 'screens.achievements.marathonDescription',
-              };
-              const translationKey = emojiToDescKey[normalizedEmoji] || emojiToDescKey[emoji];
-              if (translationKey) {
-                baseDesc = translate(translationKey, language);
-              } else {
-                console.error('[AchievementsView] Translation not found for achievement description:', dbDesc, 'emoji:', emoji);
-                baseDesc = dbDesc; // Fallback to database description if no translation found
-              }
-            }
+          let baseDesc: string | null = null;
+          const descShortKey = DB_DESC_TO_KEY[dbDesc];
+          if (descShortKey) {
+            baseDesc = translate(`screens.achievements.${descShortKey}`, language);
           } else {
-            // If no database description, try emoji map - use translate directly with current language
-            const normalizedEmoji = emoji.trim();
-            const emojiToDescKey: { [key: string]: string } = {
-              '🥇': 'screens.achievements.firstPlaceYesterday',
-              '🥈': 'screens.achievements.secondPlaceYesterday',
-              '🥉': 'screens.achievements.thirdPlaceYesterday',
-              '🏆': 'screens.achievements.firstPlaceLastWeek',
-              '👑': 'screens.achievements.firstPlaceLastMonth',
-              '🍒': 'screens.achievements.cherryDescription',
-              '🍑': 'screens.achievements.peachDescription',
-              '🎯': 'screens.achievements.milestoneDescription',
-              '✅': 'screens.achievements.dailyGoalDescription',
-              '⭐': 'screens.achievements.top5PercentDescription',
-              '🔥': 'screens.achievements.streakDescription',
-              '🤝': 'screens.achievements.teamplayerDescription',
-              '🚀': 'screens.achievements.rocketDescription',
-              '💯': 'screens.achievements.hundredDescription',
-              '🎊': 'screens.achievements.partyDescription',
-              '🌙': 'screens.achievements.nightOwlDescription',
-              '🌅': 'screens.achievements.earlyBirdDescription',
-              '🎁': 'screens.achievements.surpriseDescription',
-              '🏃': 'screens.achievements.run5kmDescription',
-              '🏃‍♀️': 'screens.achievements.run10kmDescription',
-              '🏁': 'screens.achievements.halfMarathonDescription',
-              '🏃‍♂️': 'screens.achievements.marathonDescription',
-            };
-            const translationKey = emojiToDescKey[normalizedEmoji] || emojiToDescKey[emoji];
-            if (translationKey) {
-              baseDesc = translate(translationKey, language);
-            } else {
-              baseDesc = null;
-            }
+            const descKey = EMOJI_TO_DESC_KEY[emoji.trim()] || EMOJI_TO_DESC_KEY[emoji];
+            baseDesc = descKey ? translate(descKey, language) : (dbDesc || null);
           }
+
           const description = earnedDate
             ? `${baseDesc || ''}${baseDesc ? ' • ' : ''}${translate('screens.achievements.lastEarned', language)}: ${earnedDate.toLocaleDateString(language === 'en' ? 'en-US' : 'no-NO')}`
             : baseDesc;
@@ -315,54 +218,29 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
             count: item.count || 1,
             first_earned_at: item.first_earned_at,
             last_earned_at: item.last_earned_at,
-            isPreliminary: false, // Permanente prestasjoner
+            isPreliminary: false,
           } as Achievement;
         });
 
-        console.log('[AchievementsView] Loaded permanent achievements:', transformed.length);
-
-        // Hent foreløpige prestasjoner (kun for innloggede brukere med venner)
+        // Load preliminary achievements (logged-in users only)
         let preliminaryAchievements: Achievement[] = [];
-        console.log('[AchievementsView] Checking if should load preliminary - isLoggedIn:', isLoggedIn, 'userId:', userId);
-        
         if (isLoggedIn && userId) {
           try {
-            console.log('[AchievementsView] ✅ Fetching preliminary achievements for userId:', userId);
-            
-            // Hent kun daglige foreløpige prestasjoner (for å unngå duplikater)
-            // Brukere kan ha samme rank for day/week/month, som vil gi samme emoji flere ganger
             const dailyPreliminary = await getPreliminaryAchievements(userId, 'day');
-
-            console.log('[AchievementsView] ✅ Preliminary achievements received:', {
-              daily: dailyPreliminary,
-            });
-
-            // Bruk kun daglige foreløpige prestasjoner og dedupliser
-            const allPreliminaryEmojis = Array.isArray(dailyPreliminary) 
+            const allPreliminaryEmojis = Array.isArray(dailyPreliminary)
               ? dailyPreliminary
-                  .filter((emoji): emoji is string => {
-                    const isValid = typeof emoji === 'string' && emoji.trim() !== '' && emoji.length > 0;
-                    if (!isValid) {
-                      console.log('[AchievementsView] Filtered out invalid emoji:', emoji, 'Type:', typeof emoji);
-                    }
-                    return isValid;
-                  })
-                  // Dedupliser: bare beholde første forekomst av hver emoji
-                  .filter((emoji, index, array) => array.indexOf(emoji) === index)
-              : []; // Filtrer ut tomme strenger og ugyldige verdier
+                  .filter((e): e is string => typeof e === 'string' && e.trim() !== '')
+                  .filter((e, i, arr) => arr.indexOf(e) === i)
+              : [];
 
-            console.log('[AchievementsView] ✅ All preliminary emojis (filtered and deduplicated):', allPreliminaryEmojis, 'Count:', allPreliminaryEmojis.length);
-
-            // Hent achievement types for foreløpige prestasjoner
-            const emojiToName: { [key: string]: string } = {
+            const prelimNameMap: Record<string, string> = {
               '🥇': translate('screens.achievements.dailyGold', language),
               '🥈': translate('screens.achievements.dailySilver', language),
               '🥉': translate('screens.achievements.dailyBronze', language),
               '🏆': translate('screens.achievements.weeklyWinner', language),
               '👑': translate('screens.achievements.monthlyWinner', language),
             };
-
-            const emojiToDescription: { [key: string]: string } = {
+            const prelimDescMap: Record<string, string> = {
               '🥇': translate('screens.achievements.firstPlaceTodayPreliminary', language),
               '🥈': translate('screens.achievements.secondPlaceTodayPreliminary', language),
               '🥉': translate('screens.achievements.thirdPlaceTodayPreliminary', language),
@@ -370,52 +248,31 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
               '👑': translate('screens.achievements.firstPlaceThisMonthPreliminary', language),
             };
 
-            // Lag foreløpige prestasjoner
-            // VIKTIG: Foreløpige prestasjoner skal vises basert på nåværende ranking,
-            // selv om brukeren allerede har fått permanente prestasjoner fra tidligere perioder.
-            // De skal vises med "foreløpig" styling for å indikere at de kan mistes.
-            
-            console.log('[AchievementsView] Creating preliminary achievements - will show ALL regardless of permanent achievements');
-            
-            preliminaryAchievements = allPreliminaryEmojis.map((emoji, index) => {
-              const achievement = {
-                id: `preliminary_${emoji}_${Date.now()}_${index}`,
-                emoji: emoji,
-                name: emojiToName[emoji] || translate('screens.achievements.preliminaryAchievement', language),
-                description: emojiToDescription[emoji] || null,
-                category: 'competition',
-                count: 1,
-                first_earned_at: new Date().toISOString(),
-                last_earned_at: new Date().toISOString(),
-                isPreliminary: true, // Marker som foreløpig
-              };
-              console.log('[AchievementsView] Created preliminary achievement:', achievement);
-              return achievement;
-            });
-            
-            console.log('[AchievementsView] ✅ Final preliminary achievements:', preliminaryAchievements, 'Count:', preliminaryAchievements.length);
+            preliminaryAchievements = allPreliminaryEmojis.map((emoji, index) => ({
+              id: `preliminary_${emoji}_${Date.now()}_${index}`,
+              emoji,
+              name: prelimNameMap[emoji] || translate('screens.achievements.preliminaryAchievement', language),
+              description: prelimDescMap[emoji] || null,
+              category: 'competition',
+              count: 1,
+              first_earned_at: new Date().toISOString(),
+              last_earned_at: new Date().toISOString(),
+              isPreliminary: true,
+            }));
           } catch (err) {
-            console.error('[AchievementsView] ❌ Error loading preliminary achievements:', err);
-            console.error('[AchievementsView] Error stack:', err instanceof Error ? err.stack : 'No stack');
-            // Fortsett med permanente prestasjoner selv om foreløpige feiler
+            console.error('Error loading preliminary achievements:', err);
           }
-        } else {
-          console.log('[AchievementsView] ⚠️ Skipping preliminary achievements - isLoggedIn:', isLoggedIn, 'userId:', userId);
         }
 
-        // Kombiner permanente og foreløpige prestasjoner
-        const allAchievements = [...transformed, ...preliminaryAchievements];
-        console.log('[AchievementsView] ✅ Setting achievements - total:', allAchievements.length, 'permanent:', transformed.length, 'preliminary:', preliminaryAchievements.length);
-        setAchievements(allAchievements);
+        setAchievements([...transformed, ...preliminaryAchievements]);
       }
     } catch (err) {
-      console.error('[AchievementsView] ❌ Error in loadAchievements:', err);
-      console.error('[AchievementsView] Error stack:', err instanceof Error ? err.stack : 'No stack');
+      console.error('Error in loadAchievements:', err);
       setError(translate('common.error', language));
     } finally {
       setLoading(false);
     }
-  }, [userId, isLoggedIn, language]); // Only depend on language, not on maps (we use translate directly)
+  }, [userId, isLoggedIn, language]);
 
   // Load achievements when dependencies change
   useEffect(() => {

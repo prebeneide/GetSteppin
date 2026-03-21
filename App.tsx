@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { setNavigationRef } from './components/PushNotificationHandler';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { supabase } from './lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { initializeApp } from './services/initService';
@@ -137,17 +138,37 @@ function MainTabs() {
     }
   };
 
-  // Load count on mount and when user changes
+  // Load count on mount and when user changes, then subscribe to real-time updates
   useEffect(() => {
     loadUnviewedCount();
     loadUnreadMessagesCount();
-    
-    // Refresh count every 30 seconds
-    const interval = setInterval(() => {
-      loadUnviewedCount();
-      loadUnreadMessagesCount();
-    }, 30000);
-    return () => clearInterval(interval);
+
+    if (!user) return;
+
+    // Subscribe to new walks being saved (increments walks badge in real-time)
+    const walksChannel = supabase
+      .channel(`unviewed-walks-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'walks', filter: `user_id=eq.${user.id}` },
+        () => setUnviewedWalksCount(prev => prev + 1)
+      )
+      .subscribe();
+
+    // Subscribe to new incoming messages (increments messages badge in real-time)
+    const messagesChannel = supabase
+      .channel(`unread-messages-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
+        () => setUnreadMessagesCount(prev => prev + 1)
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(walksChannel);
+      supabase.removeChannel(messagesChannel);
+    };
   }, [user]);
 
   return (
@@ -312,28 +333,13 @@ export default function App() {
 
   useEffect(() => {
     async function prepare() {
-      console.log('🚀 App starting - showing splash screen');
-      console.log('📱 appIsReady:', appIsReady);
-      
       try {
-        // Initialize migrations and storage on app start
-        console.log('⏳ Initializing app...');
         await initializeApp();
-        console.log('✅ App initialized');
-        
-        // Add a minimum delay to ensure splash screen is visible
-        // This ensures users see the splash screen even if initialization is fast
-        // In Expo Go, we need a longer delay to see the custom splash screen
-        console.log('⏳ Waiting 3 seconds for splash screen (Expo Go needs more time)...');
-        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds for Expo Go
-        console.log('✅ Splash screen delay complete');
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (e) {
         console.warn('Error during app initialization:', e);
-        // Even on error, wait minimum time
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } finally {
-        // Tell the application to render
-        console.log('✅ Setting appIsReady to true');
         setAppIsReady(true);
       }
     }

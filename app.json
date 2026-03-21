@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.steppin",
+      "bundleIdentifier": "com.euphoriaboy.steppin",
       "buildNumber": "1",
       "infoPlist": {
         "NSMotionUsageDescription": "Denne appen trenger tilgang til bevegelsesdata for å telle skritt.",
@@ -37,7 +37,7 @@
       ]
     },
     "android": {
-      "package": "com.yourname.steppin",
+      "package": "com.euphoriaboy.steppin",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

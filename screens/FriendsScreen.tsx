@@ -244,7 +244,7 @@ export default function FriendsScreen({ navigation }: FriendsScreenProps) {
                     ) : (
                       <View style={styles.avatarPlaceholder}>
                         <Text style={styles.avatarPlaceholderText}>
-                          {request.username.charAt(0).toUpperCase()}
+                          {(request.username || '?').charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}
@@ -318,7 +318,7 @@ export default function FriendsScreen({ navigation }: FriendsScreenProps) {
                     ) : (
                       <View style={styles.avatarPlaceholder}>
                         <Text style={styles.avatarPlaceholderText}>
-                          {friend.username.charAt(0).toUpperCase()}
+                          {(friend.username || '?').charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}

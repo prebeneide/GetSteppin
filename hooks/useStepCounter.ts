@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Pedometer } from 'expo-sensors';
 import type { EventSubscription } from 'expo-modules-core';
 
+export type StepCounterErrorCode = 'not_available' | 'permission_denied' | 'unknown';
+
 interface StepData {
   steps: number;
   distance: number; // in meters
@@ -14,7 +16,7 @@ export const useStepCounter = () => {
     distance: 0,
     isAvailable: false,
   });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<StepCounterErrorCode | null>(null);
 
   useEffect(() => {
     let subscription: EventSubscription | null = null;
@@ -27,7 +29,7 @@ export const useStepCounter = () => {
         
         if (!isAvailable) {
           if (isActive) {
-            setError('Skrittteller er ikke tilgjengelig på denne enheten');
+            setError('not_available');
             setStepData(prev => ({ ...prev, isAvailable: false }));
           }
           return;
@@ -39,7 +41,7 @@ export const useStepCounter = () => {
           const { status: newStatus } = await Pedometer.requestPermissionsAsync();
           if (newStatus !== 'granted') {
             if (isActive) {
-              setError('Tillatelse til å bruke skrittteller ble ikke gitt');
+              setError('permission_denied');
               setStepData(prev => ({ ...prev, isAvailable: false }));
             }
             return;
@@ -88,7 +90,7 @@ export const useStepCounter = () => {
       } catch (err: any) {
         console.error('Step counter error:', err);
         if (isActive) {
-          setError(err.message || 'Feil ved henting av skrittdata');
+          setError('unknown');
           setStepData(prev => ({ ...prev, isAvailable: false }));
         }
       }

@@ -203,7 +203,7 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
                 ) : (
                   <View style={styles.avatarPlaceholder}>
                     <Text style={styles.avatarPlaceholderText}>
-                      {friend.username.charAt(0).toUpperCase()}
+                      {(friend.username || '?').charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}

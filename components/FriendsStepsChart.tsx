@@ -521,7 +521,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
                           ) : (
                             <View style={[styles.avatarPlaceholder, { backgroundColor: color }]}>
                               <Text style={styles.avatarText}>
-                                {friend.username.charAt(0).toUpperCase()}
+                                {(friend.username || '?').charAt(0).toUpperCase()}
                               </Text>
                             </View>
                           )}

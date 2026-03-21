@@ -177,7 +177,7 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
                   ) : (
                     <View style={styles.avatarPlaceholder}>
                       <Text style={styles.avatarPlaceholderText}>
-                        {conversation.username.charAt(0).toUpperCase()}
+                        {(conversation.username || '?').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
