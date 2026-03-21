@@ -574,9 +574,8 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
         postId={postId}
         onClose={() => setLikesModalVisible(false)}
         onUserPress={(userId: string) => {
-          // Navigate to user profile if needed
-          // For now, just close the modal
           setLikesModalVisible(false);
+          navigation.navigate('FriendProfile', { friendId: userId });
         }}
       />
 
@@ -588,10 +587,9 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
           setSelectedCommentId(null);
         }}
         onUserPress={(userId: string) => {
-          // Navigate to user profile if needed
-          // For now, just close the modal
           setCommentLikesModalVisible(false);
           setSelectedCommentId(null);
+          navigation.navigate('FriendProfile', { friendId: userId });
         }}
       />
     </KeyboardAvoidingView>

@@ -43,6 +43,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
   const [hasFriends, setHasFriends] = useState<boolean | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -73,6 +74,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
     if (!user) return;
 
     setLoading(true);
+    setLoadError(false);
     try {
       const { data: friends, error: friendsError } = await getFriends(user.id);
       if (friendsError) {
@@ -104,8 +106,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       setFeedItems(merged);
     } catch (err) {
       console.error('Error loading feed:', err);
-      setAlertMessage(t('screens.feed.couldNotLoad'));
-      setAlertVisible(true);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -212,6 +213,16 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#1ED760" />
+        </View>
+      ) : loadError ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyEmoji}>⚠️</Text>
+          <Text style={styles.emptyText}>{t('screens.feed.couldNotLoad')}</Text>
+          <TouchableOpacity style={styles.addFriendsButton} onPress={loadFeed}>
+            <Text style={styles.addFriendsButtonText}>
+              {language === 'en' ? 'Try again' : 'Prøv igjen'}
+            </Text>
+          </TouchableOpacity>
         </View>
       ) : feedItems.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -405,9 +416,10 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
           setLikesModalVisible(false);
           setSelectedPostId(null);
         }}
-        onUserPress={() => {
+        onUserPress={(userId: string) => {
           setLikesModalVisible(false);
           setSelectedPostId(null);
+          navigation.navigate('FriendProfile', { friendId: userId });
         }}
       />
     </View>

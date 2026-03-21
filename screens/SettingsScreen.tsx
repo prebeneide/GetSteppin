@@ -238,9 +238,37 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     }
   };
 
+  const validateHomeAreaSettings = (): string | null => {
+    if (minWalkSpeed >= maxWalkSpeed) {
+      return t('settings.couldNotUpdateSettingsPlural') + ': ' +
+        (language === 'en'
+          ? `Min speed (${minWalkSpeed}) must be less than max speed (${maxWalkSpeed})`
+          : `Min hastighet (${minWalkSpeed}) må være lavere enn maks (${maxWalkSpeed})`);
+    }
+    if (minWalkDistance < 10) {
+      return language === 'en'
+        ? 'Minimum distance must be at least 10 meters'
+        : 'Minimum strekning må være minst 10 meter';
+    }
+    if (pauseTolerance < 1) {
+      return language === 'en'
+        ? 'Pause tolerance must be at least 1 minute'
+        : 'Pause-toleranse må være minst 1 minutt';
+    }
+    return null;
+  };
+
   const updateHomeAreaSettings = async (showSuccessMessage: boolean = false): Promise<boolean> => {
     if (!user) return false;
-    
+
+    const validationError = validateHomeAreaSettings();
+    if (validationError) {
+      setAlertTitle(t('common.error'));
+      setAlertMessage(validationError);
+      setAlertVisible(true);
+      return false;
+    }
+
     setSaving(true);
     try {
           const { error } = await supabase

@@ -310,7 +310,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                       ) : (
                         <View style={styles.avatarPlaceholder}>
                           <Text style={styles.avatarText}>
-                            {walk.post.username.charAt(0).toUpperCase()}
+                            {(walk.post.username || '?').charAt(0).toUpperCase()}
                           </Text>
                         </View>
                       )}
