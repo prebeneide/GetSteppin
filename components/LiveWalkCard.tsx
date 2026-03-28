@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import Svg, { Polyline, Circle, Rect } from 'react-native-svg';
 import { WalkCoordinate } from '../services/walkService';
 import { APP_COLORS } from '../lib/mapConfig';
 import { formatDistance, DistanceUnit } from '../lib/formatters';
@@ -29,7 +28,6 @@ export default function LiveWalkCard({
 }: LiveWalkCardProps) {
   const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0); // seconds
-  const [pulseBig, setPulseBig] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   // Elapsed timer
@@ -43,12 +41,6 @@ export default function LiveWalkCard({
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [startTime]);
-
-  // Pulse animation for current position dot in SVG
-  useEffect(() => {
-    const interval = setInterval(() => setPulseBig(b => !b), 700);
-    return () => clearInterval(interval);
-  }, []);
 
   const formatDuration = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -70,53 +62,7 @@ export default function LiveWalkCard({
     return `${paceMin}:${String(paceSec).padStart(2, '0')}`;
   }, [distance, elapsed]);
 
-  // SVG coordinate mapping
-  const { pointsAttr, currentPoint, startPoint, hasSvgData } = useMemo(() => {
-    if (coordinates.length < 2) {
-      return { pointsAttr: '', currentPoint: null, startPoint: null, hasSvgData: false };
-    }
-
-    const padding = 14;
-    const svgWidth = 600;
-    const svgHeight = 400;
-
-    const lats = coordinates.map(c => c.lat);
-    const lngs = coordinates.map(c => c.lng);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-    const latRange = Math.max(1e-6, maxLat - minLat);
-    const lngRange = Math.max(1e-6, maxLng - minLng);
-
-    // Sample to max 100 points for SVG performance
-    const maxPoints = 100;
-    const sampled =
-      coordinates.length > maxPoints
-        ? coordinates.filter(
-            (_, i) => i % Math.ceil(coordinates.length / maxPoints) === 0
-          )
-        : coordinates;
-
-    const toPoint = (c: WalkCoordinate) => ({
-      x: padding + ((c.lng - minLng) / lngRange) * (svgWidth - padding * 2),
-      y: padding + ((maxLat - c.lat) / latRange) * (svgHeight - padding * 2),
-    });
-
-    const pts = sampled.map(toPoint);
-    const pointsAttrStr = pts.map(p => `${p.x},${p.y}`).join(' ');
-    const sp = toPoint(coordinates[0]);
-    const cp = toPoint(coordinates[coordinates.length - 1]);
-
-    return {
-      pointsAttr: pointsAttrStr,
-      currentPoint: cp,
-      startPoint: sp,
-      hasSvgData: true,
-    };
-  }, [coordinates]);
-
-  // Interactive Leaflet HTML for the modal
+  // Leaflet HTML used both for the preview card and the full-screen modal
   const interactiveMapHtml = useMemo(() => {
     if (coordinates.length < 1) return '';
     const pathCoords = coordinates.map(c => `[${c.lat},${c.lng}]`).join(',');
@@ -213,55 +159,26 @@ export default function LiveWalkCard({
   return (
     <>
       <View style={styles.container}>
-        {/* Map preview (SVG, always works) */}
+        {/* Map preview — real Leaflet map, touch forwarded to modal opener */}
         <TouchableOpacity
           activeOpacity={0.92}
           onPress={() => setModalVisible(true)}
           style={styles.mapPreview}
         >
-          {hasSvgData ? (
-            <Svg width="100%" height="100%" viewBox="0 0 600 400">
-              <Rect x={0} y={0} width={600} height={400} fill="#e8f0e8" />
-              <Polyline
-                points={pointsAttr}
-                fill="none"
-                stroke={APP_COLORS.routePath}
-                strokeWidth={7}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                opacity={0.9}
-              />
-              {/* Start dot */}
-              {startPoint && (
-                <Circle
-                  cx={startPoint.x}
-                  cy={startPoint.y}
-                  r={8}
-                  fill={APP_COLORS.startMarker}
-                  stroke="white"
-                  strokeWidth={3}
-                />
-              )}
-              {/* Current position pulse */}
-              {currentPoint && (
-                <>
-                  <Circle
-                    cx={currentPoint.x}
-                    cy={currentPoint.y}
-                    r={pulseBig ? 18 : 13}
-                    fill="rgba(33,150,243,0.25)"
-                  />
-                  <Circle
-                    cx={currentPoint.x}
-                    cy={currentPoint.y}
-                    r={8}
-                    fill="#2196F3"
-                    stroke="white"
-                    strokeWidth={3}
-                  />
-                </>
-              )}
-            </Svg>
+          {interactiveMapHtml ? (
+            <WebView
+              source={{ html: interactiveMapHtml }}
+              style={styles.previewWebview}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              scrollEnabled={false}
+              pointerEvents="none"
+              showsHorizontalScrollIndicator={false}
+              showsVerticalScrollIndicator={false}
+              overScrollMode="never"
+              androidHardwareAccelerationDisabled={false}
+              startInLoadingState={false}
+            />
           ) : (
             <View style={styles.mapPlaceholder}>
               <Text style={styles.mapPlaceholderText}>📍</Text>
@@ -361,6 +278,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#e8f0e8',
     position: 'relative',
     overflow: 'hidden',
+  },
+  previewWebview: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   mapPlaceholder: {
     flex: 1,

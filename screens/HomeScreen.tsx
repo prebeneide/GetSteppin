@@ -598,12 +598,10 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             </>
           )}
 
-          {saving && (
-            <View style={styles.savingContainer}>
-              <ActivityIndicator size="small" color="#1ED760" />
-              <Text style={styles.savingText}>{t('screens.home.saving')}</Text>
-            </View>
-          )}
+          <View style={[styles.savingContainer, { opacity: saving ? 1 : 0 }]}>
+            <ActivityIndicator size="small" color="#1ED760" animating={saving} />
+            <Text style={styles.savingText}>{t('screens.home.saving')}</Text>
+          </View>
         </View>
       ) : (
         <View style={styles.content}>

@@ -378,56 +378,62 @@ export const getUserPosts = async (
       return post.display_settings?.is_public !== false;
     });
 
-    // Get likes and comments count, and check if current user liked each post
-    const postsWithDetails = await Promise.all(
-      filteredPosts.map(async (post: any) => {
-        // Get likes count
-        const { count: likesCount } = await supabase
-          .from('post_likes')
-          .select('id', { count: 'exact', head: true })
-          .eq('post_id', post.id);
+    // Bulk-fetch likes, comments, and user-liked status in 2-3 queries total
+    const postIds = filteredPosts.map((p: any) => p.id);
 
-        // Get comments count
-        const { count: commentsCount } = await supabase
-          .from('post_comments')
-          .select('id', { count: 'exact', head: true })
-          .eq('post_id', post.id);
-
-        // Check if current user liked this post
-        let isLiked = false;
-        if (currentUserId) {
-          const { data: likeData } = await supabase
+    const [likesResult, commentsResult, userLikesResult] = await Promise.all([
+      supabase
+        .from('post_likes')
+        .select('post_id')
+        .in('post_id', postIds),
+      supabase
+        .from('post_comments')
+        .select('post_id')
+        .in('post_id', postIds),
+      currentUserId
+        ? supabase
             .from('post_likes')
-            .select('id')
-            .eq('post_id', post.id)
+            .select('post_id')
+            .in('post_id', postIds)
             .eq('user_id', currentUserId)
-            .maybeSingle();
-          
-          isLiked = !!likeData;
-        }
+        : Promise.resolve({ data: [] as { post_id: string }[], error: null }),
+    ]);
 
-        return {
-          id: post.id,
-          user_id: post.user_id,
-          walk_id: post.walk_id,
-          content: post.content,
-          image_url: post.image_url || null,
-          images: post.images || null,
-          primary_image_index: post.primary_image_index || 0,
-          map_position: post.map_position !== undefined ? post.map_position : -1,
-          display_settings: post.display_settings || null,
-          created_at: post.created_at,
-          updated_at: post.updated_at,
-          username: post.user?.username || 'Ukjent',
-          avatar_url: post.user?.avatar_url || null,
-          walk: post.walk || null,
-          likes_count: likesCount || 0,
-          comments_count: commentsCount || 0,
-          is_liked: isLiked,
-          has_user_liked: isLiked,
-        };
-      })
+    // Build lookup maps from bulk results
+    const likesCounts = new Map<string, number>();
+    (likesResult.data || []).forEach((row: any) => {
+      likesCounts.set(row.post_id, (likesCounts.get(row.post_id) || 0) + 1);
+    });
+
+    const commentsCounts = new Map<string, number>();
+    (commentsResult.data || []).forEach((row: any) => {
+      commentsCounts.set(row.post_id, (commentsCounts.get(row.post_id) || 0) + 1);
+    });
+
+    const userLikedSet = new Set<string>(
+      (userLikesResult.data || []).map((row: any) => row.post_id)
     );
+
+    const postsWithDetails = filteredPosts.map((post: any) => ({
+      id: post.id,
+      user_id: post.user_id,
+      walk_id: post.walk_id,
+      content: post.content,
+      image_url: post.image_url || null,
+      images: post.images || null,
+      primary_image_index: post.primary_image_index || 0,
+      map_position: post.map_position !== undefined ? post.map_position : -1,
+      display_settings: post.display_settings || null,
+      created_at: post.created_at,
+      updated_at: post.updated_at,
+      username: post.user?.username || 'Ukjent',
+      avatar_url: post.user?.avatar_url || null,
+      walk: post.walk || null,
+      likes_count: likesCounts.get(post.id) || 0,
+      comments_count: commentsCounts.get(post.id) || 0,
+      is_liked: userLikedSet.has(post.id),
+      has_user_liked: userLikedSet.has(post.id),
+    }));
 
     return { data: postsWithDetails, error: null };
   } catch (err) {

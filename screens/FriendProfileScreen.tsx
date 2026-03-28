@@ -520,7 +520,7 @@ export default function FriendProfileScreen({
                   ) : (
                     <View style={styles.postAvatarPlaceholder}>
                       <Text style={styles.avatarText}>
-                        {post.username.charAt(0).toUpperCase()}
+                        {(post.username || '?').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
@@ -643,10 +643,9 @@ export default function FriendProfileScreen({
           setSelectedPostId(null);
         }}
         onUserPress={(userId: string) => {
-          // Navigate to user profile if needed
-          // For now, just close the modal
           setLikesModalVisible(false);
           setSelectedPostId(null);
+          navigation.navigate('FriendProfile', { friendId: userId });
         }}
       />
     </ScrollView>

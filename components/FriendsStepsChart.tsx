@@ -158,6 +158,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     }
 
     loadFriendsSteps();
+
+    // Refresh every 60 seconds so the chart stays up to date during a walk
+    const interval = setInterval(loadFriendsSteps, 60000);
+    return () => clearInterval(interval);
   }, [userId, isLoggedIn, user, period, weekOffset, monthOffset, yearOffset]);
 
   const getDateRange = (periodType: Period) => {

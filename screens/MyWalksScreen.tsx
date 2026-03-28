@@ -517,10 +517,9 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
           setSelectedPostId(null);
         }}
         onUserPress={(userId: string) => {
-          // Navigate to user profile if needed
-          // For now, just close the modal
           setLikesModalVisible(false);
           setSelectedPostId(null);
+          navigation.navigate('FriendProfile', { friendId: userId });
         }}
       />
     </View>

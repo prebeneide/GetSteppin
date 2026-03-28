@@ -359,7 +359,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         Alert.alert(t('common.error'), t('common.error'));
       } else {
         // Update local profile state
-        setProfile({ ...profile!, bio: bio.trim() || null });
+        setProfile(profile ? { ...profile, bio: bio.trim() || null } : null);
         setEditingBio(false);
       }
     } catch (err) {

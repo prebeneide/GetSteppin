@@ -423,6 +423,7 @@ interface InteractiveMapViewProps {
 }
 
 function InteractiveMapView({ coordinates, height }: InteractiveMapViewProps) {
+  const { t } = useTranslation();
   // Calculate center and bounds
   const lats = coordinates.map(c => c.lat);
   const lngs = coordinates.map(c => c.lng);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,11 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Modal,
-  FlatList,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
 import { getPreliminaryAchievements } from '../services/achievementService';
-import { useTranslation, t as translate, Language } from '../lib/i18n';
+import { useTranslation, t as translate } from '../lib/i18n';
 
 // Module-level lookup tables — defined once, reused everywhere in this file
 const EMOJI_TO_NAME_KEY: Record<string, string> = {
@@ -144,9 +143,13 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAllModal, setShowAllModal] = useState(false);
+  const isInitialLoadRef = useRef(true);
 
   const loadAchievements = useCallback(async () => {
-    setLoading(true);
+    // Only show full-screen spinner on first load; subsequent refreshes are silent
+    if (isInitialLoadRef.current) {
+      setLoading(true);
+    }
     setError(null);
     try {
       let query = supabase
@@ -271,6 +274,7 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
       setError(translate('common.error', language));
     } finally {
       setLoading(false);
+      isInitialLoadRef.current = false;
     }
   }, [userId, isLoggedIn, language]);
 
@@ -304,22 +308,6 @@ export default function AchievementsView({ userId, isLoggedIn, showTitle = true 
       return !hasPreliminary;
     });
   };
-
-  // Alle prestasjoner for modal (uten kategorifiltrering)
-  const getAllAchievementsForModal = () => {
-    return achievements.filter(achievement => {
-      // For foreløpige prestasjoner, vis dem alltid
-      if (achievement.isPreliminary) {
-        return true;
-      }
-      // For permanente prestasjoner, vis dem kun hvis det ikke finnes en foreløpig med samme emoji
-      const hasPreliminary = achievements.some(a => 
-        a.isPreliminary && a.emoji === achievement.emoji
-      );
-      return !hasPreliminary;
-    });
-  };
-
 
   if (loading) {
     return (

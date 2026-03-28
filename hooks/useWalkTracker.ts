@@ -11,7 +11,6 @@ import {
   getHomeAreaSettings,
   isOutsideHomeArea,
   HomeAreaSettings,
-  calculateDistance,
 } from '../services/walkService';
 import { useStepCounter } from './useStepCounter';
 
@@ -120,9 +119,9 @@ export const useWalkTracker = () => {
       // Set up location subscription with background support
       locationSubscriptionRef.current = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced, // Balanced accuracy for battery efficiency
-          timeInterval: LOCATION_UPDATE_INTERVAL, // Update every 10 seconds
-          distanceInterval: 10, // Update every 10 meters
+          accuracy: Location.Accuracy.High,
+          timeInterval: LOCATION_UPDATE_INTERVAL,
+          distanceInterval: 5, // Update every 5 meters (was 10)
           mayShowUserSettingsDialog: true,
         },
         (location) => {
@@ -382,50 +381,6 @@ export const useWalkTracker = () => {
           pauseStartTimeRef.current = now;
           pauseStartLocationRef.current = currentLocation;
           console.log(`Walk tracking: Pause detected - will abort if stationary for ${settings.pause_tolerance_minutes}min within ${settings.pause_radius_meters}m`);
-        }
-      }
-
-      // Check if walk should be saved automatically
-      if (walkStartTimeRef.current && walkCoordinatesRef.current.length >= 2) {
-        const duration = now - new Date(walkStartTimeRef.current).getTime();
-        const durationMinutes = duration / (1000 * 60);
-
-        // Auto-save if walk meets criteria (using settings for minimum distance)
-        if (distance >= settings.min_walk_distance_meters && durationMinutes >= MIN_WALK_DURATION_MINUTES) {
-          console.log(`Walk tracking: ✅ Auto-saving walk! Distance: ${(distance / 1000).toFixed(2)}km, Duration: ${durationMinutes.toFixed(1)}min`);
-          
-          // Save current walk and start a new one
-          const stepsDuringWalk = stepData.steps - stepsAtWalkStartRef.current;
-          const deviceId = user ? null : await getDeviceId();
-          const { error } = await saveWalk(
-            user?.id || null,
-            deviceId,
-            [...walkCoordinatesRef.current],
-            Math.max(0, stepsDuringWalk)
-          );
-
-          if (error) {
-            console.error('Error auto-saving walk:', error);
-          } else {
-            console.log('Walk auto-saved successfully');
-            
-            // Start a new walk tracking session
-            walkCoordinatesRef.current = [];
-            stepsAtWalkStartRef.current = stepData.steps;
-            lastLocationTimeRef.current = now;
-            walkStartTimeRef.current = new Date().toISOString();
-            
-            setTrackingState(prev => ({
-              ...prev,
-              currentWalk: {
-                coordinates: [],
-                startTime: walkStartTimeRef.current!,
-                distance: 0,
-              },
-            }));
-          }
-          
-          return; // Don't update state with old walk data
         }
       }
 

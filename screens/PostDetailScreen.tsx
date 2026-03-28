@@ -370,7 +370,7 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarText}>
-                    {post.username.charAt(0).toUpperCase()}
+                    {(post.username || '?').charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
@@ -475,7 +475,7 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
                     ) : (
                       <View style={styles.commentAvatarPlaceholder}>
                         <Text style={styles.commentAvatarText}>
-                          {comment.username.charAt(0).toUpperCase()}
+                          {(comment.username || '?').charAt(0).toUpperCase()}
                         </Text>
                       </View>
                     )}
