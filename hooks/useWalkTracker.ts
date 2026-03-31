@@ -49,6 +49,9 @@ export const useWalkTracker = () => {
   // Pause detection: track when user stopped and where
   const pauseStartTimeRef = useRef<number | null>(null);
   const pauseStartLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Home area debounce: require N consecutive "inside home" readings before ending walk
+  const homeAreaCountRef = useRef<number>(0);
+  const HOME_AREA_THRESHOLD = 4; // ~40 seconds at 10s interval before walk ends
 
   // Initialize permissions on mount
   useEffect(() => {
@@ -272,11 +275,18 @@ export const useWalkTracker = () => {
     );
 
     // Update outside home area ref
-    if (outsideHome !== isOutsideHomeAreaRef.current) {
-      isOutsideHomeAreaRef.current = outsideHome;
-      if (outsideHome) {
+    if (outsideHome) {
+      // Reset debounce counter when clearly outside
+      homeAreaCountRef.current = 0;
+      if (!isOutsideHomeAreaRef.current) {
+        isOutsideHomeAreaRef.current = true;
         console.log('Walk tracking: User left home area - walk tracking can start');
-      } else {
+      }
+    } else {
+      // Increment debounce counter; only flip to "inside" after threshold
+      homeAreaCountRef.current += 1;
+      if (homeAreaCountRef.current >= HOME_AREA_THRESHOLD && isOutsideHomeAreaRef.current) {
+        isOutsideHomeAreaRef.current = false;
         console.log('Walk tracking: User entered home area - walk tracking will pause');
       }
     }
@@ -304,8 +314,8 @@ export const useWalkTracker = () => {
       console.log(`Walk tracking: Speed=${speed.toFixed(1)}km/h, Distance=${distance.toFixed(0)}m, Duration=${durationMinutes.toFixed(1)}min, Steps=${stepsSinceStart}, OutsideHome=${outsideHome}`);
     }
 
-    // Only track if user is outside home area
-    if (isMoving && outsideHome) {
+    // Only track if user is outside home area (use debounced ref)
+    if (isMoving && isOutsideHomeAreaRef.current) {
       // User is moving - add coordinate and reset stop timer
       const coordinate: WalkCoordinate = {
         lat: location.coords.latitude,
@@ -394,8 +404,8 @@ export const useWalkTracker = () => {
             }
           : null,
       }));
-    } else if (!outsideHome) {
-      // User is inside home area - stop tracking if active
+    } else if (!isOutsideHomeAreaRef.current) {
+      // User is inside home area (debounced) - stop tracking if active
       if (walkStartTimeRef.current && walkCoordinatesRef.current.length >= 2) {
         const duration = now - new Date(walkStartTimeRef.current).getTime();
         const durationMinutes = duration / (1000 * 60);
@@ -430,8 +440,8 @@ export const useWalkTracker = () => {
           currentWalk: null,
         }));
       }
-    } else if (outsideHome && walkStartTimeRef.current) {
-      // User is stationary but outside home area and tracking is active
+    } else if (isOutsideHomeAreaRef.current && walkStartTimeRef.current) {
+      // User is stationary but outside home area (debounced) and tracking is active
       // Check pause detection even when stationary
       const currentLocation = { lat: location.coords.latitude, lng: location.coords.longitude };
       const hasMovedFromPauseLocation = pauseStartLocationRef.current ? 
