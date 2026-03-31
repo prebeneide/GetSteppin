@@ -13,9 +13,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { WebView } from 'react-native-webview';
 import { Linking } from 'react-native';
 import { WalkCoordinate } from '../services/walkService';
-import { getMapUrl, APP_COLORS } from '../lib/mapConfig';
-import Svg, { Polyline, Circle } from 'react-native-svg';
-import WalkMapView from './WalkMapView';
+import { APP_COLORS } from '../lib/mapConfig';
 import { useTranslation } from '../lib/i18n';
 
 interface MediaItem {
@@ -562,69 +560,40 @@ interface MapSlideProps {
   showOpenButton?: boolean;
 }
 
-function MapSlide({ coordinates, height, onPress, showOpenButton = false }: MapSlideProps) {
-  const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
+function MapSlide({ coordinates, height, onPress }: MapSlideProps) {
+  const mapHtml = useMemo(() => {
+    if (coordinates.length < 2) return '';
 
-  // Calculate center and bounds
-  const lats = coordinates.map(c => c.lat);
-  const lngs = coordinates.map(c => c.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
-  
-  // Sample coordinates for map display
-  const maxPoints = 100;
-  const sampledCoordinates = coordinates.length > maxPoints 
-    ? coordinates.filter((_, index) => index % Math.ceil(coordinates.length / maxPoints) === 0)
-    : coordinates;
-  
-  const pathCoordinates = sampledCoordinates.map(c => ({ lat: c.lat, lng: c.lng }));
-  const startCoord = { lat: coordinates[0].lat, lng: coordinates[0].lng };
-  const endCoord = { 
-    lat: coordinates[coordinates.length - 1].lat, 
-    lng: coordinates[coordinates.length - 1].lng 
-  };
+    const maxPoints = 100;
+    const sampled = coordinates.length > maxPoints
+      ? coordinates.filter((_, i) => i % Math.ceil(coordinates.length / maxPoints) === 0)
+      : coordinates;
 
-  // Get map URL
-  const mapConfig = useMemo(() => getMapUrl(
-    centerLat,
-    centerLng,
-    pathCoordinates,
-    startCoord,
-    endCoord,
-    600,
-    height * 2
-  ), [centerLat, centerLng, pathCoordinates, startCoord, endCoord, height]);
+    const pathCoords = sampled.map(c => `[${c.lat},${c.lng}]`).join(',');
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+    const centerLat = (first.lat + last.lat) / 2;
+    const centerLng = (first.lng + last.lng) / 2;
+    const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '';
 
-  const staticMapUrl = mapConfig.url;
-  const hasApiKey = mapConfig.provider !== null;
-
-  // SVG fallback
-  const { pointsAttr, startPoint, endPoint } = useMemo(() => {
-    const padding = 12;
-    const width = 600;
-    const heightPx = Math.max(200, height * 2);
-
-    const latRange = Math.max(1e-6, maxLat - minLat);
-    const lngRange = Math.max(1e-6, maxLng - minLng);
-
-    const toPoint = (c: WalkCoordinate) => {
-      const x = padding + ((c.lng - minLng) / lngRange) * (width - padding * 2);
-      const y = padding + ((maxLat - c.lat) / latRange) * (heightPx - padding * 2);
-      return { x, y };
-    };
-
-    const pts = sampledCoordinates.map(toPoint);
-    const pointsAttrStr = pts.map(p => `${p.x},${p.y}`).join(' ');
-    const sp = toPoint(sampledCoordinates[0]);
-    const ep = toPoint(sampledCoordinates[sampledCoordinates.length - 1]);
-    return { pointsAttr: pointsAttrStr, startPoint: sp, endPoint: ep };
-  }, [sampledCoordinates, minLat, maxLat, minLng, maxLng, height]);
+    return `<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden}#map{width:100vw;height:100vh}</style>
+</head><body><div id="map"></div><script>
+const map=L.map('map',{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,touchZoom:false});
+const token='${mapboxToken}';
+if(token){L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/{z}/{x}/{y}?access_token='+token,{tileSize:512,zoomOffset:-1,maxZoom:19}).addTo(map);}
+else{L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);}
+const coords=[${pathCoords}];
+const poly=L.polyline(coords,{color:'${APP_COLORS.routePath}',weight:5,opacity:0.9}).addTo(map);
+L.circleMarker([${first.lat},${first.lng}],{radius:7,color:'white',weight:2,fillColor:'${APP_COLORS.startMarker}',fillOpacity:1}).addTo(map);
+L.circleMarker([${last.lat},${last.lng}],{radius:7,color:'white',weight:2,fillColor:'${APP_COLORS.endMarker}',fillOpacity:1}).addTo(map);
+map.fitBounds(poly.getBounds(),{padding:[18,18]});
+</script></body></html>`;
+  }, [coordinates]);
 
   return (
     <TouchableOpacity
@@ -632,51 +601,20 @@ function MapSlide({ coordinates, height, onPress, showOpenButton = false }: MapS
       onPress={onPress}
       style={styles.mediaSlide}
     >
-      {imageLoading && !imageError && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={APP_COLORS.primary} />
-        </View>
-      )}
-      
-      {staticMapUrl && !imageError && hasApiKey ? (
-        <ExpoImage
-          source={{ uri: staticMapUrl }}
+      {mapHtml ? (
+        <WebView
+          source={{ html: mapHtml }}
           style={styles.mediaSlideImage}
-          contentFit="cover"
-          transition={200}
-          onLoad={() => setImageLoading(false)}
-          onError={() => {
-            setImageError(true);
-            setImageLoading(false);
-          }}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          scrollEnabled={false}
+          pointerEvents="none"
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          startInLoadingState={false}
         />
-      ) : (
-        <View style={styles.svgContainer}>
-          <Svg
-            viewBox={`0 0 600 ${Math.max(200, height * 2)}`}
-            style={styles.svgMap}
-          >
-            <Polyline
-              points={pointsAttr}
-              fill="none"
-              stroke={APP_COLORS.routePath}
-              strokeWidth="4"
-            />
-            <Circle
-              cx={startPoint.x}
-              cy={startPoint.y}
-              r="8"
-              fill={APP_COLORS.startMarker}
-            />
-            <Circle
-              cx={endPoint.x}
-              cy={endPoint.y}
-              r="8"
-              fill={APP_COLORS.endMarker}
-            />
-          </Svg>
-        </View>
-      )}
+      ) : null}
     </TouchableOpacity>
   );
 }

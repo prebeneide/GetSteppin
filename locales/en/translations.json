@@ -238,6 +238,7 @@
       "remaining": "remaining",
       "saving": "Saving...",
       "startingStepCounter": "Starting step counter...",
+      "login": "Log in",
       "streakDays": "days in a row",
       "stepCounterNotAvailable": "Step counter is not available on this device.",
       "stepCounterPermissionDenied": "Permission to use step counter was denied. Open Settings to grant access.",

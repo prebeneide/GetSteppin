@@ -420,52 +420,68 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.notificationButton}
-          onPress={() => navigation.navigate('Notifications')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.notificationIconContainer}>
-            <Text style={styles.notificationIcon}>🔔</Text>
-            {unreadNotificationsCount > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-                </Text>
-              </View>
-            )}
-          </View>
-        </TouchableOpacity>
+        {/* Notification bell — only for logged-in users */}
+        {user ? (
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.notificationIconContainer}>
+              <Text style={styles.notificationIcon}>🔔</Text>
+              {unreadNotificationsCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.notificationButton} />
+        )}
         <Text style={styles.title}>{t('screens.home.title')}</Text>
-        <TouchableOpacity
-          style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
-          activeOpacity={0.7}
-        >
-          <View style={styles.profileIconContainer}>
-            {(user && profile?.avatar_url) || (!user && anonymousAvatarUrl) ? (
-              <Image
-                source={{ uri: user ? profile!.avatar_url! : anonymousAvatarUrl! }}
-                style={styles.profileAvatar}
-                resizeMode="cover"
-              />
-            ) : user && profile?.username ? (
-              <View style={styles.profileIconCircle}>
-                <Text style={styles.profileIconText}>
-                  {profile.username.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.menuIconContainer}>
-                <View style={styles.menuIconLine} />
-                <View style={styles.menuIconLine} />
-                <View style={styles.menuIconLine} />
-              </View>
-            )}
-            {/* Online indikator for egen bruker - alltid online når innlogget */}
-            {user && <OnlineIndicator isOnline={true} size="small" />}
-          </View>
-        </TouchableOpacity>
+        {user ? (
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Profile')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.profileIconContainer}>
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={styles.profileAvatar}
+                  resizeMode="cover"
+                />
+              ) : profile?.username ? (
+                <View style={styles.profileIconCircle}>
+                  <Text style={styles.profileIconText}>
+                    {profile.username.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.menuIconContainer}>
+                  <View style={styles.menuIconLine} />
+                  <View style={styles.menuIconLine} />
+                  <View style={styles.menuIconLine} />
+                </View>
+              )}
+              <OnlineIndicator isOnline={true} size="small" />
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.profileButton}
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.loginChip}>
+              <Text style={styles.loginChipText}>{t('screens.home.login')}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
       
             {/* Show tracking status indicator - Always visible when user is logged in */}
@@ -724,6 +740,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  loginChip: {
+    backgroundColor: '#1ED760',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  loginChipText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   profileIconContainer: {
     width: '100%',

@@ -59,7 +59,7 @@ export const useWalkTracker = () => {
     const permissions = await checkLocationPermissions();
     setTrackingState(prev => ({
       ...prev,
-      isPermissionGranted: permissions.foreground && permissions.background,
+      isPermissionGranted: permissions.foreground, // background not required in Expo Go
     }));
   };
 
