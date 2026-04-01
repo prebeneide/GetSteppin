@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../lib/i18n';
-import { getFriendsStepsForPeriod, FriendStepData } from '../services/friendService';
+import { getFriendsStepsForPeriod, FriendStepData, getFriends } from '../services/friendService';
 import OnlineIndicator from './OnlineIndicator';
+import { supabase } from '../lib/supabase';
 
 interface FriendsStepsChartProps {
   userId: string | null;
@@ -159,9 +160,33 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
 
     loadFriendsSteps();
 
-    // Refresh every 60 seconds so the chart stays up to date during a walk
-    const interval = setInterval(loadFriendsSteps, 60000);
-    return () => clearInterval(interval);
+    // Realtime: refresh chart when any friend's daily_steps changes
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    getFriends(userId).then(({ data: friends }) => {
+      const friendIds = (friends || []).map(f => f.id);
+      const watchIds = [userId, ...friendIds];
+
+      channel = supabase
+        .channel(`friends-steps-${userId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'daily_steps' },
+          (payload: any) => {
+            if (watchIds.includes(payload.new?.user_id)) {
+              loadFriendsSteps();
+            }
+          }
+        )
+        .subscribe();
+    });
+
+    // Fallback poll every 30s in case realtime misses anything
+    const interval = setInterval(loadFriendsSteps, 30000);
+
+    return () => {
+      clearInterval(interval);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [userId, isLoggedIn, user, period, weekOffset, monthOffset, yearOffset]);
 
   const getDateRange = (periodType: Period) => {

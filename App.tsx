@@ -293,13 +293,10 @@ function RootNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {user ? (
           // User is logged in - show main tabs
-          <>
-            <Stack.Screen name="Main" component={MainTabs} />
-          </>
+          <Stack.Screen name="Main" component={MainTabs} />
         ) : (
-          // User is not logged in - show auth screens
+          // User is not logged in - require login
           <>
-            <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
           </>
