@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserWalks, Walk, markWalksAsViewed } from '../services/walkService';
 import { getDeviceId } from '../lib/deviceId';
@@ -265,7 +266,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color="#1ED760" />
         </TouchableOpacity>
         <Text style={styles.title}>{t('screens.myWalks.title')}</Text>
       </View>
@@ -276,7 +277,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
         </View>
       ) : walks.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>👣</Text>
+          <Ionicons name="footsteps-outline" size={48} color="#999" />
           <Text style={styles.emptyText}>{t('screens.myWalks.empty')}</Text>
           <Text style={styles.emptySubtext}>
             {t('screens.myWalks.emptySubtext')}
@@ -329,7 +330,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                           styles.sharedBadgeText,
                           walk.post?.display_settings?.is_public === false && styles.notSharedBadgeText
                         ]}>
-                          {walk.post?.display_settings?.is_public === false ? `✗ ${t('screens.myWalks.notShared')}` : `✓ ${t('screens.myWalks.shared')}`}
+                          {walk.post?.display_settings?.is_public === false ? t('screens.myWalks.notShared') : t('screens.myWalks.shared')}
                         </Text>
                       </View>
                     )}
@@ -338,9 +339,12 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                   {/* Walk Info */}
                   {walk.post.walk && (
                     <View style={styles.walkInfo}>
-                      <Text style={styles.walkTitle}>
-                        👣 {formatDistance(walk.post.walk.distance_meters, distanceUnit)} {t('common.walk')}
-                      </Text>
+                      <View style={styles.walkTitleRow}>
+                        <Ionicons name="footsteps-outline" size={14} color="#666" />
+                        <Text style={styles.walkTitle}>
+                          {formatDistance(walk.post.walk.distance_meters, distanceUnit)} {t('common.walk')}
+                        </Text>
+                      </View>
                       <Text style={styles.walkStats}>
                         {walk.post.display_settings?.show_duration !== false && formatDuration(walk.post.walk.duration_minutes)}
                         {walk.post.display_settings?.show_duration !== false && walk.post.walk.steps > 0 && ' • '}
@@ -391,12 +395,16 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                         }
                       }}
                     >
-                      <Text style={[
-                        styles.actionText,
-                        walk.post.is_liked && styles.actionTextLiked
-                      ]}>
-                        {walk.post.is_liked ? '❤️' : '🤍'} {walk.post.likes_count || 0}
-                      </Text>
+                      <View style={styles.actionContent}>
+                        <Ionicons
+                          name={walk.post.is_liked ? 'heart' : 'heart-outline'}
+                          size={20}
+                          color={walk.post.is_liked ? '#1ED760' : '#666'}
+                        />
+                        <Text style={[styles.actionText, walk.post.is_liked && styles.actionTextLiked]}>
+                          {walk.post.likes_count || 0}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                     {walk.post.likes_count > 0 && (
                       <TouchableOpacity
@@ -421,9 +429,10 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                         navigation.navigate('PostDetail', { postId: walk.post!.id });
                       }}
                     >
-                      <Text style={styles.actionText}>
-                        💬 {walk.post.comments_count || 0}
-                      </Text>
+                      <View style={styles.actionContent}>
+                        <Ionicons name="chatbubble-outline" size={18} color="#666" />
+                        <Text style={styles.actionText}>{walk.post.comments_count || 0}</Text>
+                      </View>
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
@@ -462,7 +471,7 @@ export default function MyWalksScreen({ navigation }: MyWalksScreenProps) {
                         styles.sharedBadgeText,
                         (walk.post as PostWithDetails).display_settings?.is_public === false && styles.notSharedBadgeText
                       ]}>
-                        {(walk.post as PostWithDetails).display_settings?.is_public === false ? `✗ ${t('screens.myWalks.notShared')}` : `✓ ${t('screens.myWalks.shared')}`}
+                        {(walk.post as PostWithDetails).display_settings?.is_public === false ? t('screens.myWalks.notShared') : t('screens.myWalks.shared')}
                       </Text>
                     </View>
                   )}
@@ -640,11 +649,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
+  walkTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
   walkTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1ED760',
-    marginBottom: 4,
   },
   walkStats: {
     fontSize: 14,
@@ -668,8 +682,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  actionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   actionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
   },
   actionTextLiked: {

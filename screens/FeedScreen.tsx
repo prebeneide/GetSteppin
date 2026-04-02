@@ -9,6 +9,7 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { getFeedPosts, PostWithDetails, likePost, unlikePost } from '../services/postService';
@@ -184,7 +185,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.emptyContainer}>
@@ -209,7 +210,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
         </View>
       ) : loadError ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>⚠️</Text>
+          <Ionicons name="warning-outline" size={48} color="#999" />
           <Text style={styles.emptyText}>{t('screens.feed.couldNotLoad')}</Text>
           <TouchableOpacity style={styles.addFriendsButton} onPress={loadFeed}>
             <Text style={styles.addFriendsButtonText}>
@@ -219,7 +220,7 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
         </View>
       ) : feedItems.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📰</Text>
+          <Ionicons name="newspaper-outline" size={48} color="#999" />
           <Text style={styles.emptyText}>
             {hasFriends === false ? t('screens.feed.noFriends') : t('screens.feed.noPosts')}
           </Text>
@@ -307,9 +308,12 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
                 {/* Walk Info */}
                 {post.walk && (
                   <View style={styles.walkInfo}>
-                    <Text style={styles.walkTitle}>
-                      👣 {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
-                    </Text>
+                    <View style={styles.walkTitleRow}>
+                      <Ionicons name="footsteps-outline" size={14} color="#666" />
+                      <Text style={styles.walkTitle}>
+                        {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
+                      </Text>
+                    </View>
                     <Text style={styles.walkStats}>
                       {post.display_settings?.show_duration !== false && formatDuration(post.walk.duration_minutes)}
                       {post.display_settings?.show_duration !== false && post.walk.steps > 0 && ' • '}
@@ -359,9 +363,16 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
                       }
                     }}
                   >
-                    <Text style={[styles.actionText, post.is_liked && styles.actionTextLiked]}>
-                      {post.is_liked ? '❤️' : '🤍'} {post.likes_count || 0}
-                    </Text>
+                    <View style={styles.actionContent}>
+                      <Ionicons
+                        name={post.is_liked ? 'heart' : 'heart-outline'}
+                        size={20}
+                        color={post.is_liked ? '#1ED760' : '#666'}
+                      />
+                      <Text style={[styles.actionText, post.is_liked && styles.actionTextLiked]}>
+                        {post.likes_count || 0}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                   {post.likes_count > 0 && (
                     <TouchableOpacity
@@ -386,7 +397,10 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
                       navigation.navigate('PostDetail', { postId: post.id });
                     }}
                   >
-                    <Text style={styles.actionText}>💬 {post.comments_count || 0}</Text>
+                    <View style={styles.actionContent}>
+                      <Ionicons name="chatbubble-outline" size={18} color="#666" />
+                      <Text style={styles.actionText}>{post.comments_count || 0}</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
               </TouchableOpacity>
@@ -599,11 +613,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
+  walkTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
   walkTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1ED760',
-    marginBottom: 4,
   },
   walkStats: {
     fontSize: 14,
@@ -627,8 +646,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  actionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   actionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
   },
   actionTextLiked: {

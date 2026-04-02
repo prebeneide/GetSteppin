@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import AlertModal from '../components/AlertModal';
@@ -575,7 +576,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color="#1ED760" />
         </TouchableOpacity>
       </View>
 

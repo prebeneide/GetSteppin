@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { getDeviceId } from '../lib/deviceId';
@@ -195,7 +196,7 @@ export default function GoalSettingsScreen({ navigation }: GoalSettingsScreenPro
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
 

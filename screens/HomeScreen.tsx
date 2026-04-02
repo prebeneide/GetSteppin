@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Image, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import { useStepCounter } from '../hooks/useStepCounter';
@@ -426,7 +427,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           activeOpacity={0.7}
         >
           <View style={styles.notificationIconContainer}>
-            <Text style={styles.notificationIcon}>🔔</Text>
+            <Ionicons
+              name={unreadNotificationsCount > 0 ? 'notifications' : 'notifications-outline'}
+              size={26}
+              color="#333"
+            />
             {unreadNotificationsCount > 0 && (
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>
@@ -564,7 +569,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
               {currentStreak >= 2 && (
                 <View style={styles.streakBadge}>
-                  <Text style={styles.streakEmoji}>🔥</Text>
+                  <Ionicons name="flame" size={18} color="#FF6B35" />
                   <Text style={styles.streakText}>
                     {currentStreak} {t('screens.home.streakDays')}
                   </Text>

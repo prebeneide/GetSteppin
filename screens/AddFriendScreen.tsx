@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { searchUsers, sendFriendRequest, type Friend } from '../services/friendService';
 import AlertModal from '../components/AlertModal';
@@ -130,7 +131,7 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>{t('common.backArrow')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
@@ -152,7 +153,7 @@ export default function AddFriendScreen({ navigation }: AddFriendScreenProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color="#1ED760" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('screens.addFriend.title')}</Text>
         <View style={styles.headerSpacer} />

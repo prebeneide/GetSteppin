@@ -9,6 +9,7 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -106,7 +107,7 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.content}>
@@ -121,7 +122,7 @@ export default function ChatListScreen({ navigation }: ChatListScreenProps) {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>

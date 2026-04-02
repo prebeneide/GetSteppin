@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../lib/i18n';
 import { getFriendsStepsForPeriod, FriendStepData, getFriends } from '../services/friendService';
@@ -336,7 +337,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="people-outline" size={18} color="#333" />
+            <Text style={styles.title}>{t('screens.friendsSteps.friendsStepsToday')}</Text>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#1ED760" />
@@ -349,7 +353,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="people-outline" size={18} color="#333" />
+            <Text style={styles.title}>{t('screens.friendsSteps.friendsStepsToday')}</Text>
+          </View>
         </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
@@ -362,7 +369,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsStepsToday')}</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="people-outline" size={18} color="#333" />
+            <Text style={styles.title}>{t('screens.friendsSteps.friendsStepsToday')}</Text>
+          </View>
         </View>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>
@@ -403,7 +413,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Text style={styles.title}>👥 {t('screens.friendsSteps.friendsSteps')}</Text>
+          <View style={styles.titleRow}>
+            <Ionicons name="people-outline" size={18} color="#333" />
+            <Text style={styles.title}>{t('screens.friendsSteps.friendsSteps')}</Text>
+          </View>
           <Text style={styles.periodLabel}>{getPeriodLabel()}</Text>
         </View>
         {currentUserRank !== null && (
@@ -646,11 +659,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 5,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#333',
-    flex: 1,
   },
   periodLabel: {
     fontSize: 14,

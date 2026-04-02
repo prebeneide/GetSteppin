@@ -10,6 +10,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../contexts/AuthContext';
@@ -378,7 +379,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -590,7 +591,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             style={styles.settingsButton}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Text style={styles.settingsButtonText}>⚙️ {t('settings.title')}</Text>
+            <View style={{flexDirection:'row',alignItems:'center',gap:6}}><Ionicons name="settings-outline" size={18} color="#666" /><Text style={styles.settingsButtonText}>{t('settings.title')}</Text></View>
             <Text style={styles.settingsButtonArrow}>→</Text>
           </TouchableOpacity>
         </View>

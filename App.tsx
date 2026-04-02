@@ -4,6 +4,7 @@ import { setNavigationRef } from './components/PushNotificationHandler';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from './lib/supabase';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -201,8 +202,8 @@ function MainTabs() {
         component={HomeStack}
         options={{
           tabBarLabel: t('navigation.home'),
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>🏠</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -211,14 +212,13 @@ function MainTabs() {
         component={WalksStack}
         listeners={{
           focus: () => {
-            // Refresh count when screen comes into focus
             loadUnviewedCount();
           },
         }}
         options={{
           tabBarLabel: t('navigation.myWalks'),
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>👣</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'footsteps' : 'footsteps-outline'} size={24} color={color} />
           ),
           tabBarBadge: unviewedWalksCount > 0 ? unviewedWalksCount : undefined,
           tabBarBadgeStyle: {
@@ -234,8 +234,8 @@ function MainTabs() {
         component={FeedStack}
         options={{
           tabBarLabel: t('navigation.feed'),
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>📰</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'newspaper' : 'newspaper-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -244,14 +244,13 @@ function MainTabs() {
         component={MessagesStack}
         listeners={{
           focus: () => {
-            // Refresh count when screen comes into focus
             loadUnreadMessagesCount();
           },
         }}
         options={{
           tabBarLabel: t('navigation.messages'),
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>💬</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={24} color={color} />
           ),
           tabBarBadge: unreadMessagesCount > 0 ? unreadMessagesCount : undefined,
           tabBarBadgeStyle: {
@@ -267,8 +266,8 @@ function MainTabs() {
         component={FriendsStack}
         options={{
           tabBarLabel: t('navigation.friends'),
-          tabBarIcon: ({ color }) => (
-            <Text style={{ fontSize: 24 }}>👥</Text>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'people' : 'people-outline'} size={24} color={color} />
           ),
         }}
       />

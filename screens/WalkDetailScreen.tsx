@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -583,7 +584,7 @@ export default function WalkDetailScreen({ navigation, route }: WalkDetailScreen
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.backButtonText}>{t('common.backArrow')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -605,7 +606,7 @@ export default function WalkDetailScreen({ navigation, route }: WalkDetailScreen
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← Tilbake</Text>
+          <Ionicons name="chevron-back" size={24} color="#1ED760" />
         </TouchableOpacity>
         {/* Shared badge - show "Delt" or "Ikke delt" based on is_public */}
         {walk.is_shared && (

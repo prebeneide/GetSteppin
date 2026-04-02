@@ -9,6 +9,7 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import StatisticsView from '../components/StatisticsView';
@@ -357,7 +358,7 @@ export default function FriendProfileScreen({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.loadingContainer}>
@@ -372,7 +373,7 @@ export default function FriendProfileScreen({
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backButtonText}>← {t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color="#1ED760" />
           </TouchableOpacity>
         </View>
         <View style={styles.errorContainer}>
@@ -407,7 +408,7 @@ export default function FriendProfileScreen({
             })
           }
         >
-          <Text style={styles.chatButtonText}>💬</Text>
+          <Ionicons name="chatbubble-outline" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -534,9 +535,12 @@ export default function FriendProfileScreen({
               {/* Walk Info */}
               {post.walk && (
                 <View style={styles.walkInfo}>
-                  <Text style={styles.walkTitle}>
-                    👣 {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
-                  </Text>
+                  <View style={styles.walkTitleRow}>
+                    <Ionicons name="footsteps-outline" size={14} color="#666" />
+                    <Text style={styles.walkTitle}>
+                      {formatDistance(post.walk.distance_meters, distanceUnit)} {t('common.walk')}
+                    </Text>
+                  </View>
                   <Text style={styles.walkStats}>
                     {post.display_settings?.show_duration !== false && formatDuration(post.walk.duration_minutes)}
                     {post.display_settings?.show_duration !== false && post.walk.steps > 0 && ' • '}
@@ -587,12 +591,16 @@ export default function FriendProfileScreen({
                     }
                   }}
                 >
-                  <Text style={[
-                    styles.actionText,
-                    post.is_liked && styles.actionTextLiked
-                  ]}>
-                    {post.is_liked ? '❤️' : '🤍'} {post.likes_count || 0}
-                  </Text>
+                  <View style={styles.actionContent}>
+                    <Ionicons
+                      name={post.is_liked ? 'heart' : 'heart-outline'}
+                      size={20}
+                      color={post.is_liked ? '#1ED760' : '#666'}
+                    />
+                    <Text style={[styles.actionText, post.is_liked && styles.actionTextLiked]}>
+                      {post.likes_count || 0}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
                 {post.likes_count > 0 && (
                   <TouchableOpacity
@@ -617,9 +625,10 @@ export default function FriendProfileScreen({
                     navigation.navigate('PostDetail', { postId: post.id });
                   }}
                 >
-                  <Text style={styles.actionText}>
-                    💬 {post.comments_count || 0}
-                  </Text>
+                  <View style={styles.actionContent}>
+                    <Ionicons name="chatbubble-outline" size={18} color="#666" />
+                    <Text style={styles.actionText}>{post.comments_count || 0}</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -904,11 +913,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 12,
   },
+  walkTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
   walkTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#1ED760',
-    marginBottom: 4,
   },
   walkStats: {
     fontSize: 14,
@@ -932,8 +946,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  actionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   actionText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#666',
   },
   actionTextLiked: {
