@@ -500,6 +500,96 @@ export const getSentFriendRequests = async (
 };
 
 /**
+ * Hent vennskapsforhold mellom to brukere
+ */
+export const getFriendshipBetween = async (
+  userId: string,
+  otherUserId: string
+): Promise<{ data: { id: string; status: string; is_requester: boolean } | null; error: any }> => {
+  try {
+    const { data, error } = await supabase
+      .from('friendships')
+      .select('id, status, requester_id, addressee_id')
+      .or(
+        `and(requester_id.eq.${userId},addressee_id.eq.${otherUserId}),and(requester_id.eq.${otherUserId},addressee_id.eq.${userId})`
+      )
+      .maybeSingle();
+
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: null };
+
+    return {
+      data: {
+        id: data.id,
+        status: data.status,
+        is_requester: data.requester_id === userId,
+      },
+      error: null,
+    };
+  } catch (err: any) {
+    return { data: null, error: err };
+  }
+};
+
+/**
+ * Blokker en bruker
+ */
+export const blockUser = async (
+  blockerId: string,
+  blockedId: string
+): Promise<{ error: any }> => {
+  try {
+    // Sjekk om det finnes et eksisterende vennskap
+    const { data: existing } = await supabase
+      .from('friendships')
+      .select('id')
+      .or(
+        `and(requester_id.eq.${blockerId},addressee_id.eq.${blockedId}),and(requester_id.eq.${blockedId},addressee_id.eq.${blockerId})`
+      )
+      .maybeSingle();
+
+    if (existing) {
+      // Oppdater til blokkert — sett blokkøren som requester
+      const { error } = await supabase
+        .from('friendships')
+        .delete()
+        .eq('id', existing.id);
+      if (error) return { error };
+    }
+
+    // Opprett nytt vennskap med status 'blocked' der blokkøren er requester
+    const { error } = await supabase
+      .from('friendships')
+      .insert({ requester_id: blockerId, addressee_id: blockedId, status: 'blocked' });
+
+    return { error: error || null };
+  } catch (err: any) {
+    return { error: err };
+  }
+};
+
+/**
+ * Opphev blokkering
+ */
+export const unblockUser = async (
+  blockerId: string,
+  blockedId: string
+): Promise<{ error: any }> => {
+  try {
+    const { error } = await supabase
+      .from('friendships')
+      .delete()
+      .eq('requester_id', blockerId)
+      .eq('addressee_id', blockedId)
+      .eq('status', 'blocked');
+
+    return { error: error || null };
+  } catch (err: any) {
+    return { error: err };
+  }
+};
+
+/**
  * Fjern venn (slett vennskap)
  */
 export const removeFriend = async (

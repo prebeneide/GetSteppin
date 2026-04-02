@@ -18,7 +18,7 @@ import OnlineIndicator from '../components/OnlineIndicator';
 import MediaGallery from '../components/MediaGallery';
 import LikesModal from '../components/LikesModal';
 import AlertModal from '../components/AlertModal';
-import { getFriendCount } from '../services/friendService';
+import { getFriendCount, getFriendshipBetween, sendFriendRequest, removeFriend, blockUser, unblockUser, declineFriendRequest, acceptFriendRequest } from '../services/friendService';
 import { getTotalSteps, getTotalDistanceKm } from '../services/stepService';
 import { getUserPosts, PostWithDetails, likePost, unlikePost, getAllImageUrls } from '../services/postService';
 import { formatDistance, DistanceUnit } from '../lib/formatters';
@@ -158,17 +158,20 @@ export default function FriendProfileScreen({
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMessage, setAlertMessage] = useState('');
+  const [friendship, setFriendship] = useState<{ id: string; status: string; is_requester: boolean } | null | undefined>(undefined); // undefined = not loaded yet
+  const [friendshipProcessing, setFriendshipProcessing] = useState(false);
 
   useEffect(() => {
     if (friendId) {
       loadFriendProfile();
       loadPosts();
+      if (user) loadFriendship();
     } else {
       setError('Ingen venn ID oppgitt');
       setLoading(false);
     }
     loadPreferences();
-  }, [friendId]);
+  }, [friendId, user]);
 
   useEffect(() => {
     loadPreferences();
@@ -275,9 +278,95 @@ export default function FriendProfileScreen({
     }
   };
 
+  const loadFriendship = async () => {
+    if (!user || !friendId) return;
+    const { data } = await getFriendshipBetween(user.id, friendId);
+    setFriendship(data); // null = no relationship, object = has relationship
+  };
+
+  const handleAddFriend = async () => {
+    if (!user || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { data, error } = await sendFriendRequest(user.id, friendId);
+    if (error) {
+      setAlertMessage(error.message || language === 'en' ? 'Could not send friend request' : 'Kunne ikke sende venneforespørsel');
+      setAlertVisible(true);
+    } else {
+      setFriendship({ id: data.id, status: 'pending', is_requester: true });
+    }
+    setFriendshipProcessing(false);
+  };
+
+  const handleAcceptFriend = async () => {
+    if (!user || !friendship || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { error } = await acceptFriendRequest(friendship.id, user.id);
+    if (error) {
+      setAlertMessage(language === 'en' ? 'Could not accept request' : 'Kunne ikke godta forespørsel');
+      setAlertVisible(true);
+    } else {
+      setFriendship({ ...friendship, status: 'accepted' });
+      setFriendCount(prev => (prev ?? 0) + 1);
+    }
+    setFriendshipProcessing(false);
+  };
+
+  const handleDeclineFriend = async () => {
+    if (!user || !friendship || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { error } = await declineFriendRequest(friendship.id, user.id);
+    if (error) {
+      setAlertMessage(language === 'en' ? 'Could not decline request' : 'Kunne ikke avslå forespørsel');
+      setAlertVisible(true);
+    } else {
+      setFriendship(null);
+    }
+    setFriendshipProcessing(false);
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!user || !friendship || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { error } = await removeFriend(friendship.id, user.id);
+    if (error) {
+      setAlertMessage(language === 'en' ? 'Could not remove friend' : 'Kunne ikke slette venn');
+      setAlertVisible(true);
+    } else {
+      setFriendship(null);
+      setFriendCount(prev => Math.max(0, (prev ?? 1) - 1));
+    }
+    setFriendshipProcessing(false);
+  };
+
+  const handleBlock = async () => {
+    if (!user || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { error } = await blockUser(user.id, friendId);
+    if (error) {
+      setAlertMessage(language === 'en' ? 'Could not block user' : 'Kunne ikke blokkere bruker');
+      setAlertVisible(true);
+    } else {
+      setFriendship({ id: '', status: 'blocked', is_requester: true });
+    }
+    setFriendshipProcessing(false);
+  };
+
+  const handleUnblock = async () => {
+    if (!user || friendshipProcessing) return;
+    setFriendshipProcessing(true);
+    const { error } = await unblockUser(user.id, friendId);
+    if (error) {
+      setAlertMessage(language === 'en' ? 'Could not unblock user' : 'Kunne ikke oppheve blokkering');
+      setAlertVisible(true);
+    } else {
+      setFriendship(null);
+    }
+    setFriendshipProcessing(false);
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadFriendProfile(), loadPosts()]);
+    await Promise.all([loadFriendProfile(), loadPosts(), loadFriendship()]);
     setRefreshing(false);
   };
 
@@ -470,6 +559,118 @@ export default function FriendProfileScreen({
             <Text style={styles.goalValue}>
               {profile.daily_step_goal.toLocaleString()} {t('screens.home.steps')}
             </Text>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {user && friendship !== undefined && (
+          <View style={styles.actionButtons}>
+            {/* Send melding — alltid synlig (med mindre blokkert) */}
+            {friendship?.status !== 'blocked' && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => navigation.navigate('Chat', {
+                  friendId,
+                  friendUsername: displayUsername,
+                  friendAvatarUrl: displayAvatarUrl,
+                })}
+              >
+                <Ionicons name="chatbubble-outline" size={18} color="#fff" />
+                <Text style={styles.actionBtnText}>
+                  {language === 'en' ? 'Message' : 'Send melding'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Vennskapsstatus-knapp */}
+            {friendship === null && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnSecondary]}
+                onPress={handleAddFriend}
+                disabled={friendshipProcessing}
+              >
+                <Ionicons name="person-add-outline" size={18} color="#1ED760" />
+                <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>
+                  {language === 'en' ? 'Add friend' : 'Legg til venn'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {friendship?.status === 'pending' && friendship.is_requester && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnMuted]}
+                onPress={handleDeclineFriend}
+                disabled={friendshipProcessing}
+              >
+                <Ionicons name="time-outline" size={18} color="#999" />
+                <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>
+                  {language === 'en' ? 'Request sent' : 'Forespørsel sendt'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {friendship?.status === 'pending' && !friendship.is_requester && (
+              <>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnSecondary]}
+                  onPress={handleAcceptFriend}
+                  disabled={friendshipProcessing}
+                >
+                  <Ionicons name="checkmark-outline" size={18} color="#1ED760" />
+                  <Text style={[styles.actionBtnText, styles.actionBtnTextSecondary]}>
+                    {language === 'en' ? 'Accept' : 'Godta'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.actionBtnDanger]}
+                  onPress={handleDeclineFriend}
+                  disabled={friendshipProcessing}
+                >
+                  <Ionicons name="close-outline" size={18} color="#fff" />
+                  <Text style={styles.actionBtnText}>
+                    {language === 'en' ? 'Decline' : 'Avslå'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {friendship?.status === 'accepted' && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnDanger]}
+                onPress={handleRemoveFriend}
+                disabled={friendshipProcessing}
+              >
+                <Ionicons name="person-remove-outline" size={18} color="#fff" />
+                <Text style={styles.actionBtnText}>
+                  {language === 'en' ? 'Remove friend' : 'Slett venn'}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Blokker / opphev */}
+            {friendship?.status === 'blocked' && friendship.is_requester ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnMuted]}
+                onPress={handleUnblock}
+                disabled={friendshipProcessing}
+              >
+                <Ionicons name="ban-outline" size={18} color="#999" />
+                <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>
+                  {language === 'en' ? 'Unblock' : 'Opphev blokkering'}
+                </Text>
+              </TouchableOpacity>
+            ) : friendship?.status !== 'blocked' && (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionBtnMuted]}
+                onPress={handleBlock}
+                disabled={friendshipProcessing}
+              >
+                <Ionicons name="ban-outline" size={18} color="#999" />
+                <Text style={[styles.actionBtnText, styles.actionBtnTextMuted]}>
+                  {language === 'en' ? 'Block' : 'Blokker'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </View>
@@ -941,6 +1142,44 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 16,
+    justifyContent: 'center',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1ED760',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+  actionBtnSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#1ED760',
+  },
+  actionBtnDanger: {
+    backgroundColor: '#e53935',
+  },
+  actionBtnMuted: {
+    backgroundColor: '#f0f0f0',
+  },
+  actionBtnText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionBtnTextSecondary: {
+    color: '#1ED760',
+  },
+  actionBtnTextMuted: {
+    color: '#999',
   },
   actionButton: {
     flexDirection: 'row',
