@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -44,13 +44,6 @@ export default function FeedScreen({ navigation }: FeedScreenProps) {
   const [distanceUnit, setDistanceUnit] = useState<DistanceUnit>('km');
   const [hasFriends, setHasFriends] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      loadFeed();
-      loadPreferences();
-    }
-  }, [user]);
 
   useFocusEffect(
     React.useCallback(() => {

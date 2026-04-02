@@ -314,6 +314,9 @@ export const useWalkTracker = () => {
             const { error } = await saveWalk(user?.id || null, deviceId, [...walkCoordinatesRef.current], stepsDuringWalk);
             if (error) console.error('Error saving walk after pause:', error);
           }
+          // Clear walk data before stopTracking so it doesn't try to save again
+          walkCoordinatesRef.current = [];
+          walkStartTimeRef.current = null;
           stopTracking();
           return;
         }
