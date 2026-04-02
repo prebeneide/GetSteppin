@@ -234,277 +234,115 @@ export const useWalkTracker = () => {
   };
 
   const handleLocationUpdate = async (location: Location.LocationObject) => {
-    if (!location.coords || !homeAreaSettingsRef.current) {
-      console.log('Walk tracking: Missing location coords or home area settings');
-      return;
-    }
+    if (!location.coords || !homeAreaSettingsRef.current) return;
 
     const now = Date.now();
     const timestamp = new Date().toISOString();
-    // GPS speed can be null/undefined, so we calculate it from coordinates if available
-    let speed = location.coords.speed ? location.coords.speed * 3.6 : 0; // Convert m/s to km/h
-    
-    // If speed is not available from GPS, estimate from last known location
-    if (speed === 0 && lastKnownLocationRef.current && lastLocationTimeRef.current) {
-      const timeDiff = (now - lastLocationTimeRef.current) / 1000; // seconds
-      if (timeDiff > 0) {
-        // Calculate distance between two coordinates
-        const distance = calculateDistance([
-          {
-            lat: lastKnownLocationRef.current.coords.latitude,
-            lng: lastKnownLocationRef.current.coords.longitude,
-            timestamp: new Date(lastLocationTimeRef.current).toISOString(),
-          },
-          {
-            lat: location.coords.latitude,
-            lng: location.coords.longitude,
-            timestamp: timestamp,
-          },
-        ]);
-        speed = (distance / timeDiff) * 3.6; // Convert m/s to km/h
-      }
-    }
-    
     const settings = homeAreaSettingsRef.current;
+    const lat = location.coords.latitude;
+    const lng = location.coords.longitude;
 
-    // Check if user is outside home area
-    const outsideHome = isOutsideHomeArea(
-      location.coords.latitude,
-      location.coords.longitude,
-      settings
-    );
-
-    // Update outside home area ref
-    if (outsideHome) {
-      // Reset debounce counter when clearly outside
-      homeAreaCountRef.current = 0;
-      if (!isOutsideHomeAreaRef.current) {
-        isOutsideHomeAreaRef.current = true;
-        console.log('Walk tracking: User left home area - walk tracking can start');
-      }
-    } else {
-      // Increment debounce counter; only flip to "inside" after threshold
-      homeAreaCountRef.current += 1;
-      if (homeAreaCountRef.current >= HOME_AREA_THRESHOLD && isOutsideHomeAreaRef.current) {
-        isOutsideHomeAreaRef.current = false;
-        console.log('Walk tracking: User entered home area - walk tracking will pause');
+    // Calculate speed from GPS or from displacement since last point
+    let speed = (location.coords.speed ?? 0) * 3.6; // m/s → km/h
+    if (speed === 0 && lastKnownLocationRef.current && lastLocationTimeRef.current) {
+      const timeDiff = (now - lastLocationTimeRef.current) / 1000;
+      if (timeDiff > 0 && timeDiff < 60) { // only if last update was recent
+        const dist = calculateDistance([
+          { lat: lastKnownLocationRef.current.coords.latitude, lng: lastKnownLocationRef.current.coords.longitude, timestamp: '' },
+          { lat, lng, timestamp: '' },
+        ]);
+        speed = (dist / timeDiff) * 3.6;
       }
     }
 
-    // Check if user is moving (using minimum speed from settings - only for starting)
-    // Once tracking has started, ignore minimum speed to allow for pauses
-    const isMoving = walkStartTimeRef.current ? true : speed >= settings.min_walk_speed_kmh;
-    
-    // Check maximum speed (with step detection to allow running)
-    const hasSteps = stepData.steps > stepsAtWalkStartRef.current;
-    const stepsSinceStart = stepData.steps - stepsAtWalkStartRef.current;
-    const isLikelyRunning = hasSteps && stepsSinceStart > 50; // At least 50 steps indicates actual movement
-    
-    // If speed exceeds max AND user is not running (no steps), abort tracking (vehicle detected)
-    if (speed > settings.max_walk_speed_kmh && !isLikelyRunning && walkStartTimeRef.current) {
-      console.log(`Walk tracking: ⚠️ Speed too high (${speed.toFixed(1)}km/h) without steps - aborting (vehicle detected)`);
-      stopTracking();
+    // Skip GPS jumps (>50 km/h while not running) — don't end the walk, just ignore the point
+    if (speed > 50) {
+      lastKnownLocationRef.current = location;
+      lastLocationTimeRef.current = now;
       return;
     }
-    
-    // Debug logging
-    if (walkStartTimeRef.current) {
-      const durationMinutes = (now - new Date(walkStartTimeRef.current).getTime()) / (1000 * 60);
-      const distance = calculateDistance(walkCoordinatesRef.current);
-      console.log(`Walk tracking: Speed=${speed.toFixed(1)}km/h, Distance=${distance.toFixed(0)}m, Duration=${durationMinutes.toFixed(1)}min, Steps=${stepsSinceStart}, OutsideHome=${outsideHome}`);
+
+    // Update home area debounce
+    const outsideHome = isOutsideHomeArea(lat, lng, settings);
+    if (outsideHome) {
+      homeAreaCountRef.current = 0;
+      isOutsideHomeAreaRef.current = true;
+    } else {
+      homeAreaCountRef.current += 1;
+      if (homeAreaCountRef.current >= HOME_AREA_THRESHOLD) {
+        isOutsideHomeAreaRef.current = false;
+      }
     }
 
-    // Only track if user is outside home area (use debounced ref)
-    if (isMoving && isOutsideHomeAreaRef.current) {
-      // User is moving - add coordinate and reset stop timer
-      const coordinate: WalkCoordinate = {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-        timestamp,
-      };
+    lastKnownLocationRef.current = location;
+    lastLocationTimeRef.current = now;
 
-      walkCoordinatesRef.current.push(coordinate);
-      lastLocationTimeRef.current = now;
-      lastKnownLocationRef.current = location;
+    // Always add coordinate if outside home area (even when slow/still)
+    if (isOutsideHomeAreaRef.current) {
+      walkCoordinatesRef.current.push({ lat, lng, timestamp });
 
-      // Calculate current distance
-      const distance = calculateDistance(walkCoordinatesRef.current);
-
-      // Start tracking if not already tracking
+      // Start walk timer on first coordinate outside home
       if (!walkStartTimeRef.current) {
-        walkStartTimeRef.current = new Date().toISOString();
+        walkStartTimeRef.current = timestamp;
         stepsAtWalkStartRef.current = stepData.steps;
         pauseStartTimeRef.current = null;
         pauseStartLocationRef.current = null;
-        console.log('Walk tracking started - user outside home area');
       }
 
-      // Check pause detection (only when tracking is active)
-      const currentLocation = { lat: location.coords.latitude, lng: location.coords.longitude };
-      const hasMovedFromPauseLocation = pauseStartLocationRef.current ? 
-        calculateDistance([
-          { lat: pauseStartLocationRef.current.lat, lng: pauseStartLocationRef.current.lng, timestamp: '' },
-          { lat: currentLocation.lat, lng: currentLocation.lng, timestamp: '' }
-        ]) > settings.pause_radius_meters : true;
-      
-      // Pause detection logic
-      if (hasMovedFromPauseLocation) {
-        // User has moved outside pause radius - reset pause detection
+      const distance = calculateDistance(walkCoordinatesRef.current);
+
+      // Pause detection: user stopped for too long → save and end walk
+      const currentLoc = { lat, lng };
+      const movedFromPause = pauseStartLocationRef.current
+        ? calculateDistance([
+            { lat: pauseStartLocationRef.current.lat, lng: pauseStartLocationRef.current.lng, timestamp: '' },
+            { lat, lng, timestamp: '' },
+          ]) > settings.pause_radius_meters
+        : true;
+
+      if (movedFromPause) {
         pauseStartTimeRef.current = null;
         pauseStartLocationRef.current = null;
       } else if (pauseStartTimeRef.current) {
-        // User is still within pause radius - check if pause time exceeded
-        const pauseDurationMinutes = (now - pauseStartTimeRef.current) / (1000 * 60);
-        if (pauseDurationMinutes >= settings.pause_tolerance_minutes) {
-          // User has been stationary too long - check if this is shopping center walking
-          const totalDistance = calculateDistance(walkCoordinatesRef.current);
-          if (totalDistance < 50) {
-            // Less than 50m total movement - likely shopping center, abort
-            console.log(`Walk tracking: ⚠️ Pause too long (${pauseDurationMinutes.toFixed(1)}min) with minimal movement (${totalDistance.toFixed(0)}m) - aborting (shopping center detected)`);
-            stopTracking();
-            return;
-          } else {
-            // User has moved significantly before pausing - save walk (likely dog park)
-            console.log(`Walk tracking: ⚠️ Pause too long (${pauseDurationMinutes.toFixed(1)}min) but significant movement (${totalDistance.toFixed(0)}m) - saving walk`);
-            if (!walkStartTimeRef.current) return;
-            const durationMinutes = (now - new Date(walkStartTimeRef.current).getTime()) / (1000 * 60);
-            if (durationMinutes >= MIN_WALK_DURATION_MINUTES && totalDistance >= settings.min_walk_distance_meters) {
-              const stepsDuringWalk = stepData.steps - stepsAtWalkStartRef.current;
-              const deviceId = user ? null : await getDeviceId();
-              const { error } = await saveWalk(
-                user?.id || null,
-                deviceId,
-                [...walkCoordinatesRef.current],
-                Math.max(0, stepsDuringWalk)
-              );
-              if (error) {
-                console.error('Error saving walk:', error);
-              }
-            }
-            stopTracking();
-            return;
+        const pausedMinutes = (now - pauseStartTimeRef.current) / 60000;
+        if (pausedMinutes >= settings.pause_tolerance_minutes) {
+          // Long pause — save walk and end
+          const durationMinutes = (now - new Date(walkStartTimeRef.current).getTime()) / 60000;
+          if (durationMinutes >= MIN_WALK_DURATION_MINUTES && distance >= settings.min_walk_distance_meters) {
+            const stepsDuringWalk = Math.max(0, stepData.steps - stepsAtWalkStartRef.current);
+            const deviceId = user ? null : await getDeviceId();
+            const { error } = await saveWalk(user?.id || null, deviceId, [...walkCoordinatesRef.current], stepsDuringWalk);
+            if (error) console.error('Error saving walk after pause:', error);
           }
+          stopTracking();
+          return;
         }
-      } else if (!hasMovedFromPauseLocation && speed < settings.min_walk_speed_kmh) {
-        // User just stopped (speed below minimum) - start pause detection
-        if (!pauseStartTimeRef.current) {
-          pauseStartTimeRef.current = now;
-          pauseStartLocationRef.current = currentLocation;
-          console.log(`Walk tracking: Pause detected - will abort if stationary for ${settings.pause_tolerance_minutes}min within ${settings.pause_radius_meters}m`);
-        }
+      } else if (speed < settings.min_walk_speed_kmh) {
+        // Start pause timer
+        pauseStartTimeRef.current = now;
+        pauseStartLocationRef.current = currentLoc;
       }
 
       setTrackingState(prev => ({
         ...prev,
         currentWalk: prev.currentWalk
-          ? {
-              ...prev.currentWalk,
-              coordinates: [...walkCoordinatesRef.current],
-              distance,
-            }
+          ? { ...prev.currentWalk, coordinates: [...walkCoordinatesRef.current], distance }
           : null,
       }));
-    } else if (!isOutsideHomeAreaRef.current) {
-      // User is inside home area (debounced) - stop tracking if active
-      if (walkStartTimeRef.current && walkCoordinatesRef.current.length >= 2) {
-        const duration = now - new Date(walkStartTimeRef.current).getTime();
-        const durationMinutes = duration / (1000 * 60);
-        const distance = calculateDistance(walkCoordinatesRef.current);
-
-        // Save walk if it meets criteria
-        if (durationMinutes >= MIN_WALK_DURATION_MINUTES && distance >= settings.min_walk_distance_meters) {
-          console.log('User returned home - saving walk');
-          const stepsDuringWalk = stepData.steps - stepsAtWalkStartRef.current;
-          const deviceId = user ? null : await getDeviceId();
-          const { error } = await saveWalk(
-            user?.id || null,
-            deviceId,
-            [...walkCoordinatesRef.current],
-            Math.max(0, stepsDuringWalk)
-          );
-
-          if (error) {
-            console.error('Error saving walk:', error);
-          } else {
-            console.log('Walk saved successfully');
-          }
-        }
-
-        // Reset walk tracking
-        walkCoordinatesRef.current = [];
-        walkStartTimeRef.current = null;
-        stepsAtWalkStartRef.current = stepData.steps;
-        
-        setTrackingState(prev => ({
-          ...prev,
-          currentWalk: null,
-        }));
+    } else if (!isOutsideHomeAreaRef.current && walkStartTimeRef.current && walkCoordinatesRef.current.length >= 2) {
+      // Back home (debounced) — save walk
+      const durationMinutes = (now - new Date(walkStartTimeRef.current).getTime()) / 60000;
+      const distance = calculateDistance(walkCoordinatesRef.current);
+      if (durationMinutes >= MIN_WALK_DURATION_MINUTES && distance >= settings.min_walk_distance_meters) {
+        const stepsDuringWalk = Math.max(0, stepData.steps - stepsAtWalkStartRef.current);
+        const deviceId = user ? null : await getDeviceId();
+        const { error } = await saveWalk(user?.id || null, deviceId, [...walkCoordinatesRef.current], stepsDuringWalk);
+        if (error) console.error('Error saving walk on return home:', error);
       }
-    } else if (isOutsideHomeAreaRef.current && walkStartTimeRef.current) {
-      // User is stationary but outside home area (debounced) and tracking is active
-      // Check pause detection even when stationary
-      const currentLocation = { lat: location.coords.latitude, lng: location.coords.longitude };
-      const hasMovedFromPauseLocation = pauseStartLocationRef.current ? 
-        calculateDistance([
-          { lat: pauseStartLocationRef.current.lat, lng: pauseStartLocationRef.current.lng, timestamp: '' },
-          { lat: currentLocation.lat, lng: currentLocation.lng, timestamp: '' }
-        ]) > settings.pause_radius_meters : true;
-      
-      if (hasMovedFromPauseLocation) {
-        // User has moved outside pause radius - reset pause detection
-        pauseStartTimeRef.current = null;
-        pauseStartLocationRef.current = null;
-      } else if (pauseStartTimeRef.current) {
-        // User is still within pause radius - check if pause time exceeded
-        const pauseDurationMinutes = (now - pauseStartTimeRef.current) / (1000 * 60);
-        if (pauseDurationMinutes >= settings.pause_tolerance_minutes) {
-          // User has been stationary too long - check if this is shopping center walking
-          const totalDistance = calculateDistance(walkCoordinatesRef.current);
-          if (totalDistance < 50) {
-            // Less than 50m total movement - likely shopping center, abort
-            console.log(`Walk tracking: ⚠️ Pause too long (${pauseDurationMinutes.toFixed(1)}min) with minimal movement (${totalDistance.toFixed(0)}m) - aborting (shopping center detected)`);
-            stopTracking();
-            return;
-          } else {
-            // User has moved significantly before pausing - save walk (likely dog park)
-            console.log(`Walk tracking: ⚠️ Pause too long (${pauseDurationMinutes.toFixed(1)}min) but significant movement (${totalDistance.toFixed(0)}m) - saving walk`);
-            if (!walkStartTimeRef.current) return;
-            const durationMinutes = (now - new Date(walkStartTimeRef.current).getTime()) / (1000 * 60);
-            if (durationMinutes >= MIN_WALK_DURATION_MINUTES && totalDistance >= settings.min_walk_distance_meters) {
-              const stepsDuringWalk = stepData.steps - stepsAtWalkStartRef.current;
-              const deviceId = user ? null : await getDeviceId();
-              const { error } = await saveWalk(
-                user?.id || null,
-                deviceId,
-                [...walkCoordinatesRef.current],
-                Math.max(0, stepsDuringWalk)
-              );
-              if (error) {
-                console.error('Error saving walk:', error);
-              }
-            }
-            stopTracking();
-            return;
-          }
-        }
-      } else if (!hasMovedFromPauseLocation && speed < settings.min_walk_speed_kmh) {
-        // User just stopped (speed below minimum) - start pause detection
-        if (!pauseStartTimeRef.current) {
-          pauseStartTimeRef.current = now;
-          pauseStartLocationRef.current = currentLocation;
-          console.log(`Walk tracking: Pause detected - will abort if stationary for ${settings.pause_tolerance_minutes}min within ${settings.pause_radius_meters}m`);
-        }
-      } else {
-        // Fallback: check old stop detection threshold
-        if (lastLocationTimeRef.current) {
-          const timeSinceLastMovement = now - lastLocationTimeRef.current;
-          if (timeSinceLastMovement >= STOP_DETECTION_THRESHOLD_MS) {
-            // User has been stationary for 5 minutes - stop tracking and save walk
-            console.log('Walk ended: User stationary for 5 minutes');
-            stopTracking();
-          }
-        }
-      }
+      walkCoordinatesRef.current = [];
+      walkStartTimeRef.current = null;
+      stepsAtWalkStartRef.current = stepData.steps;
+      setTrackingState(prev => ({ ...prev, currentWalk: null }));
     }
   };
 
