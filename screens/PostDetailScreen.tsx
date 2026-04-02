@@ -512,12 +512,16 @@ export default function PostDetailScreen({ navigation, route }: PostDetailScreen
                     onPress={() => handleLikeComment(comment.id, comment.is_liked || false)}
                     disabled={!user || likingCommentId === comment.id}
                   >
-                    <Text style={[
-                      styles.commentActionText,
-                      comment.is_liked && styles.commentActionTextLiked
-                    ]}>
-                      {`${comment.is_liked ? '❤️' : '🤍'} ${comment.likes_count || 0}`}
-                    </Text>
+                    <View style={styles.commentActionContent}>
+                      <Ionicons
+                        name={comment.is_liked ? 'heart' : 'heart-outline'}
+                        size={16}
+                        color={comment.is_liked ? '#1ED760' : '#666'}
+                      />
+                      <Text style={[styles.commentActionText, comment.is_liked && styles.commentActionTextLiked]}>
+                        {comment.likes_count || 0}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                   {comment.likes_count && comment.likes_count > 0 && (
                     <TouchableOpacity
@@ -837,6 +841,11 @@ const styles = StyleSheet.create({
   commentActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  commentActionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   commentActionText: {
     fontSize: 14,
