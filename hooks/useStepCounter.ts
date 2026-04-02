@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Pedometer } from 'expo-sensors';
 import type { EventSubscription } from 'expo-modules-core';
 
@@ -17,6 +17,8 @@ export const useStepCounter = () => {
     isAvailable: false,
   });
   const [error, setError] = useState<StepCounterErrorCode | null>(null);
+  // Steps since midnight fetched via getStepCountAsync — used as base for watchStepCount deltas
+  const initialStepsRef = useRef<number>(0);
 
   useEffect(() => {
     let subscription: EventSubscription | null = null;
@@ -63,7 +65,7 @@ export const useStepCounter = () => {
         try {
           const result = await Pedometer.getStepCountAsync(startOfDay, endOfDay);
           if (isActive) {
-            // Calculate distance (assuming average step length of 0.75 meters)
+            initialStepsRef.current = result.steps;
             const distanceInMeters = result.steps * 0.75;
             setStepData({
               steps: result.steps,
@@ -75,13 +77,15 @@ export const useStepCounter = () => {
           console.log('getStepCountAsync not available (Android?), using watchStepCount');
         }
 
-        // Subscribe to step updates (works on both iOS and Android)
+        // Subscribe to step updates (works on both iOS and Android).
+        // watchStepCount returns steps since the subscription started (delta from 0),
+        // so we add the initial count to keep the total since midnight.
         subscription = Pedometer.watchStepCount((result: { steps: number }) => {
           if (isActive) {
-            // Calculate distance (assuming average step length of 0.75 meters)
-            const distanceInMeters = result.steps * 0.75;
+            const totalSteps = initialStepsRef.current + result.steps;
+            const distanceInMeters = totalSteps * 0.75;
             setStepData({
-              steps: result.steps,
+              steps: totalSteps,
               distance: Math.round(distanceInMeters),
               isAvailable: true,
             });

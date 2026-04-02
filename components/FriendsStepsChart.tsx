@@ -161,8 +161,10 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     loadFriendsSteps();
 
     // Realtime: refresh chart when any friend's daily_steps changes
+    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     getFriends(userId).then(({ data: friends }) => {
+      if (cancelled) return;
       const friendIds = (friends || []).map(f => f.id);
       const watchIds = [userId, ...friendIds];
 
@@ -184,6 +186,7 @@ export default function FriendsStepsChart({ userId, isLoggedIn }: FriendsStepsCh
     const interval = setInterval(loadFriendsSteps, 30000);
 
     return () => {
+      cancelled = true;
       clearInterval(interval);
       if (channel) supabase.removeChannel(channel);
     };
