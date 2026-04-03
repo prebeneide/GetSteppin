@@ -522,7 +522,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           onPress={handlePickImage}
           disabled={sending || uploadingImage}
         >
-          <Text style={styles.imageButtonText}>📷</Text>
+          <Ionicons name="image-outline" size={22} color="#999" />
         </TouchableOpacity>
         <TextInput
           style={styles.input}
@@ -545,7 +545,7 @@ export default function ChatScreen({ navigation, route }: ChatScreenProps) {
           {(sending || uploadingImage) ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.sendButtonText}>{t('common.send')}</Text>
+            <Ionicons name="send" size={18} color="#fff" />
           )}
         </TouchableOpacity>
       </View>
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fafafa',
   },
   messagesContent: {
     padding: 15,
@@ -673,20 +673,18 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   messageContainer: {
-    maxWidth: '75%',
-    padding: 12,
-    borderRadius: 16,
+    maxWidth: '78%',
+    padding: 11,
+    borderRadius: 18,
   },
   myMessage: {
     backgroundColor: '#1ED760',
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 5,
   },
   friendMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: '#f0f0f0',
+    borderBottomLeftRadius: 5,
   },
   // Special styling for messages with images only (no text)
   messageWithImageOnly: {
@@ -703,13 +701,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   textContainerWithImageFriendMessage: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f0f0f0',
     borderRadius: 12,
     padding: 8,
     marginTop: 8,
     alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
   },
   messageText: {
     fontSize: 16,
@@ -722,7 +718,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   friendMessageText: {
-    color: '#333',
+    color: '#111',
   },
   messageTime: {
     fontSize: 11,
@@ -782,25 +778,22 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 15 : 20,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#f0f0f0',
     backgroundColor: '#fff',
-    gap: 10,
+    gap: 8,
     alignItems: 'flex-end',
   },
   imageButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  imageButtonText: {
-    fontSize: 20,
+    marginBottom: 2,
   },
   imageWrapper: {
     width: 150,
@@ -862,30 +855,27 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    borderColor: '#e8e8e8',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
     fontSize: 16,
-    maxHeight: 100,
-    backgroundColor: '#f9f9f9',
+    maxHeight: 120,
+    backgroundColor: '#f7f7f7',
     minHeight: 40,
+    color: '#111',
   },
   sendButton: {
-    backgroundColor: '#1ED760',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    backgroundColor: '#1ED760',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 0,
   },
   sendButtonDisabled: {
-    backgroundColor: '#cccccc',
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#d0d0d0',
   },
 });
 
