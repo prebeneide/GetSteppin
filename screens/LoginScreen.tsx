@@ -60,10 +60,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         }
         
         showAlert(t('screens.login.title'), errorMessage);
-      } else {
-        // Success - navigate back to Home
-        navigation.navigate('Home');
       }
+      // On success, AuthContext updates user state and RootNavigator switches to MainTabs automatically
     } catch (err: any) {
       setLoading(false);
       // Only log in development
@@ -84,7 +82,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => navigation.goBack()}
           >
             <Text style={styles.backButtonText}>← {t('navigation.home')}</Text>
           </TouchableOpacity>

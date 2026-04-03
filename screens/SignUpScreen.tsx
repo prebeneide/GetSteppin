@@ -173,7 +173,7 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.goBack()}
         >
           <Text style={styles.backButtonText}>← {t('navigation.home')}</Text>
         </TouchableOpacity>
